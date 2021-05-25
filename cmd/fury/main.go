@@ -9,7 +9,7 @@ import (
 func main() {
 	rootCmd, cmdCtx := cli.NewRootAndContext()
 	if err := rootCmd.ExecuteContext(cmdCtx); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
 		os.Exit(1)
 	}
 }

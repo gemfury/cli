@@ -9,17 +9,17 @@ import (
 
 func NewCmdSharingAdd() *cobra.Command {
 	addCmd := &cobra.Command{
-		Use:   "sharing:add",
-		Short: "Invite an account to collaborate",
-		Run: func(cmd *cobra.Command, args []string) {
+		Use:   "sharing:add EMAIL",
+		Short: "Add a collaborator",
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				log.Fatal("Please specify at least one collaborator")
+				return fmt.Errorf("Please specify at least one collaborator")
 			}
 
 			cc := cmd.Context()
 			c, err := newAPIClient(cc)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 
 			for _, name := range args {
@@ -32,6 +32,8 @@ func NewCmdSharingAdd() *cobra.Command {
 
 				fmt.Printf("Invited %q as a collaborator\n", name)
 			}
+
+			return nil
 		},
 	}
 
@@ -40,17 +42,17 @@ func NewCmdSharingAdd() *cobra.Command {
 
 func NewCmdSharingRemove() *cobra.Command {
 	addCmd := &cobra.Command{
-		Use:   "sharing:remove",
+		Use:   "sharing:remove EMAIL",
 		Short: "Remove a collaborator",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				log.Fatal("Please specify at least one collaborator")
+				return fmt.Errorf("Please specify at least one collaborator")
 			}
 
 			cc := cmd.Context()
 			c, err := newAPIClient(cc)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 
 			for _, name := range args {
@@ -63,6 +65,8 @@ func NewCmdSharingRemove() *cobra.Command {
 
 				fmt.Printf("Removed %q as a collaborator\n", name)
 			}
+
+			return nil
 		},
 	}
 
