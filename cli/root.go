@@ -18,7 +18,8 @@ func NewRootAndContext() (*cobra.Command, context.Context) {
 
 	// Global flags (account, verbose, etc)
 	rootFlagSet := rootCmd.PersistentFlags()
-	rootFlagSet.StringVar(&flags.Account, "account", "", "Current account")
+	rootFlagSet.StringVar(&flags.AuthToken, "api-token", "", "Inline authentication token")
+	rootFlagSet.StringVar(&flags.Account, "account", "", "Current account username")
 	rootCmd.SetGlobalNormalizationFunc(globalFlagNormalization)
 
 	// Connect child commands

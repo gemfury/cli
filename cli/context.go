@@ -11,7 +11,8 @@ const (
 )
 
 type globalFlags struct {
-	Account string
+	AuthToken string
+	Account   string
 }
 
 func contextWithGlobalFlags(ctx context.Context) (*globalFlags, context.Context) {

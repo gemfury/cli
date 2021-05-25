@@ -11,15 +11,19 @@ import (
 	"runtime"
 )
 
-func newAPIClient(cc context.Context) (*api.Client, error) {
+func newAPIClient(cc context.Context) (c *api.Client, err error) {
 	flags := ctxGlobalFlags(cc)
 
-	token, err := netrcAuth()
-	if err != nil {
-		return nil, err
+	// Token comes from CLI flags or .netrc
+	token := flags.AuthToken
+	if token == "" {
+		token, err = netrcAuth()
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	c := api.NewClient(token, flags.Account)
+	c = api.NewClient(token, flags.Account)
 	return c, nil
 }
 
