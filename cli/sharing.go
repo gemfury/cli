@@ -37,3 +37,34 @@ func NewCmdSharingAdd() *cobra.Command {
 
 	return addCmd
 }
+
+func NewCmdSharingRemove() *cobra.Command {
+	addCmd := &cobra.Command{
+		Use:   "sharing:remove",
+		Short: "Remove a collaborator",
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) == 0 {
+				log.Fatal("Please specify at least one collaborator")
+			}
+
+			cc := cmd.Context()
+			c, err := newAPIClient(cc)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			for _, name := range args {
+				err := c.RemoveCollaborator(cc, name)
+
+				if err != nil {
+					log.Printf("Problem removing %q: %s\n", name, err)
+					continue
+				}
+
+				fmt.Printf("Removed %q as a collaborator\n", name)
+			}
+		},
+	}
+
+	return addCmd
+}

@@ -24,6 +24,7 @@ func NewRootAndContext() (*cobra.Command, context.Context) {
 	// Connect child commands
 	rootCmd.AddCommand(NewCmdWhoAmI())
 	rootCmd.AddCommand(NewCmdSharingAdd())
+	rootCmd.AddCommand(NewCmdSharingRemove())
 
 	return rootCmd, cmdCtx
 }
