@@ -7,6 +7,7 @@ import (
 	"log"
 )
 
+// NewCmdSharingAdd generates the Cobra command for "sharing:add"
 func NewCmdSharingAdd() *cobra.Command {
 	addCmd := &cobra.Command{
 		Use:   "sharing:add EMAIL",
@@ -40,6 +41,7 @@ func NewCmdSharingAdd() *cobra.Command {
 	return addCmd
 }
 
+// NewCmdSharingRemove generates the Cobra command for "sharing:add"
 func NewCmdSharingRemove() *cobra.Command {
 	addCmd := &cobra.Command{
 		Use:   "sharing:remove EMAIL",

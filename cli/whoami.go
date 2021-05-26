@@ -5,6 +5,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewCmdWhoAmI generates the Cobra command for "whoami"
 func NewCmdWhoAmI() *cobra.Command {
 	whoCmd := &cobra.Command{
 		Use:   "whoami",

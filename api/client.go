@@ -11,18 +11,40 @@ import (
 )
 
 var (
-	ErrFuryServer  = errors.New("Fury-API server error")
-	ErrClientAuth  = errors.New("Unauthorized client")
+	// ErrFuryServer is the error for 5xx server errors
+	ErrFuryServer = errors.New("Fury-API server error")
+
+	// ErrClientAuth is the error for 401/403 from server
+	ErrClientAuth = errors.New("Unauthorized client")
+
+	// DefaultConduit is a wrapper for http.DefaultClient
 	DefaultConduit = &conduitStandard{http.DefaultClient}
+
+	// Default "Accept" header for Gemfury API requests
+	hdrAcceptAPIv1 = "application/vnd.fury.v1"
 )
 
+// StatusCodeToError converts API response status to error code
+func StatusCodeToError(s int) error {
+	if s >= 200 && s < 300 {
+		return nil
+	} else if s >= 401 && s <= 403 {
+		return ErrClientAuth
+	} else if s >= 500 {
+		return ErrFuryServer
+	} else {
+		return fmt.Errorf(http.StatusText(s))
+	}
+}
+
+// Client is the main entrypoint for interacting with Gemfury API
 type Client struct {
 	conduit conduit
 	Account string
 	Token   string
 }
 
-// Generate new client
+// NewClient creates a new client using the DefaultConduit
 func NewClient(token, account string) *Client {
 	return &Client{
 		conduit: DefaultConduit,
@@ -31,9 +53,16 @@ func NewClient(token, account string) *Client {
 	}
 }
 
-// Generate URL to access API
-func (c *Client) urlFor(rawPath string, impersonate bool) string {
-	baseURL, _ := url.Parse("https://api.fury.io")
+func (c *Client) newRequest(cc context.Context, method, rawPath string, impersonate bool) *request {
+	return c.makeRequest(cc, method, "https://api.fury.io", rawPath, impersonate)
+}
+
+func (c *Client) newPushRequest(cc context.Context, method, rawPath string, impersonate bool) *request {
+	return c.makeRequest(cc, method, "https://push.fury.io", rawPath, impersonate)
+}
+
+func (c *Client) makeRequest(cc context.Context, method, base, rawPath string, impersonate bool) *request {
+	baseURL, _ := url.Parse(base)
 
 	if token := c.Token; token != "" {
 		baseURL.User = url.UserPassword(token, "")
@@ -46,24 +75,33 @@ func (c *Client) urlFor(rawPath string, impersonate bool) string {
 		out = out + "?" + url.Values{"as": []string{as}}.Encode()
 	}
 
-	return out
+	req, err := c.conduit.NewRequest(cc, method, out, nil)
+	return &request{Request: req, err: err, conduit: c.conduit}
+}
+
+// API Request to be executed on client
+type request struct {
+	*http.Request
+	err error
+	conduit
 }
 
 // Fetch and decode JSON from Gemfury with Authentication, returns expiry and error
-func (c *Client) doJSON(cc context.Context, method, url string, data interface{}) error {
-	req, err := c.conduit.NewRequest(cc, method, url, nil)
-	if err != nil {
-		return err
+func (r *request) doJSON(data interface{}) error {
+	if r.err != nil {
+		return r.err
 	}
 
-	resp, err := c.conduit.Do(req)
+	resp, err := r.conduit.Do(r.Request)
 	if err != nil {
+		r.err = err
 		return err
 	}
 
 	defer resp.Body.Close()
 
 	if err := StatusCodeToError(resp.StatusCode); err != nil {
+		r.err = err
 		return err
 	}
 
@@ -72,19 +110,6 @@ func (c *Client) doJSON(cc context.Context, method, url string, data interface{}
 	}
 
 	return json.NewDecoder(resp.Body).Decode(data)
-}
-
-// Convert API response status to error code
-func StatusCodeToError(s int) error {
-	if s >= 200 && s < 300 {
-		return nil
-	} else if s >= 401 && s <= 403 {
-		return ErrClientAuth
-	} else if s >= 500 {
-		return ErrFuryServer
-	} else {
-		return fmt.Errorf(http.StatusText(s))
-	}
 }
 
 // Wrapper for net/http and http.Client
@@ -103,6 +128,6 @@ func (c *conduitStandard) NewRequest(cc context.Context, url, method string, bod
 		return req, err
 	}
 
-	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Accept", hdrAcceptAPIv1)
 	return req, nil
 }

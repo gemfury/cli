@@ -7,6 +7,7 @@ import (
 	"context"
 )
 
+// NewRootAndContext creates the root Cobra CLI command and context
 func NewRootAndContext() (*cobra.Command, context.Context) {
 	flags, cmdCtx := contextWithGlobalFlags(context.Background())
 
@@ -23,6 +24,7 @@ func NewRootAndContext() (*cobra.Command, context.Context) {
 	rootCmd.SetGlobalNormalizationFunc(globalFlagNormalization)
 
 	// Connect child commands
+	rootCmd.AddCommand(NewCmdPush())
 	rootCmd.AddCommand(NewCmdWhoAmI())
 	rootCmd.AddCommand(NewCmdSharingAdd())
 	rootCmd.AddCommand(NewCmdSharingRemove())

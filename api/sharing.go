@@ -5,14 +5,14 @@ import (
 	"net/url"
 )
 
+// AddCollaborator invites a collaborator via username or email
 func (c *Client) AddCollaborator(cc context.Context, name string) error {
-	url := c.urlFor("/1/collaborators/"+url.PathEscape(name), true)
-	err := c.doJSON(cc, "PUT", url, nil)
-	return err
+	req := c.newRequest(cc, "PUT", "/collaborators/"+url.PathEscape(name), true)
+	return req.doJSON(nil)
 }
 
+// RemoveCollaborator removes a collaborator via username or email
 func (c *Client) RemoveCollaborator(cc context.Context, name string) error {
-	url := c.urlFor("/1/collaborators/"+url.PathEscape(name), true)
-	err := c.doJSON(cc, "DELETE", url, nil)
-	return err
+	req := c.newRequest(cc, "DELETE", "/collaborators/"+url.PathEscape(name), true)
+	return req.doJSON(nil)
 }
