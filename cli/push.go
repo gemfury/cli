@@ -78,8 +78,10 @@ func NewCmdPush() *cobra.Command {
 					fmt.Printf("%s- done\n", prefix)
 				} else if os.IsNotExist(err) {
 					fmt.Printf("%s- file not found\n", prefix)
-				} else if errors.Is(err, api.ErrClientAuth) {
+				} else if errors.Is(err, api.ErrUnauthorized) {
 					fmt.Printf("%s- unauthorized\n", prefix)
+				} else if errors.Is(err, api.ErrForbidden) {
+					fmt.Printf("%s- no permission\n", prefix)
 				} else if err.Error() == "Conflict" {
 					fmt.Printf("%s- this version already exists\n", prefix)
 				} else {

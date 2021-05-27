@@ -15,7 +15,11 @@ var (
 	ErrFuryServer = errors.New("Fury-API server error")
 
 	// ErrClientAuth is the error for 401/403 from server
-	ErrClientAuth = errors.New("Unauthorized client")
+	ErrForbidden    = errors.New("You're not allowed to access this")
+	ErrUnauthorized = errors.New("Authentication failure")
+
+	// ErrClientAuth is the error for 404 from server
+	ErrNotFound = errors.New("Doesn't look like this exists")
 
 	// DefaultConduit is a wrapper for http.DefaultClient
 	DefaultConduit = &conduitStandard{http.DefaultClient}
@@ -26,13 +30,18 @@ var (
 
 // StatusCodeToError converts API response status to error code
 func StatusCodeToError(s int) error {
-	if s >= 200 && s < 300 {
+	switch {
+	case s == 401:
+		return ErrUnauthorized
+	case s == 403:
+		return ErrForbidden
+	case s == 404:
+		return ErrNotFound
+	case s >= 200 && s < 300:
 		return nil
-	} else if s >= 401 && s <= 403 {
-		return ErrClientAuth
-	} else if s >= 500 {
+	case s >= 500:
 		return ErrFuryServer
-	} else {
+	default:
 		return fmt.Errorf(http.StatusText(s))
 	}
 }
