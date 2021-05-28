@@ -5,7 +5,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCmdSharingRemove generates the Cobra command for "sharing:add"
+// NewCmdYank generates the Cobra command for "yank"
 func NewCmdYank() *cobra.Command {
 	var versionFlag string
 

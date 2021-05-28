@@ -1,6 +1,8 @@
 package api
 
 import (
+	"github.com/yosida95/uritemplate/v3"
+
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,17 +10,20 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 var (
 	// ErrFuryServer is the error for 5xx server errors
 	ErrFuryServer = errors.New("Fury-API server error")
 
-	// ErrClientAuth is the error for 401/403 from server
-	ErrForbidden    = errors.New("You're not allowed to access this")
+	// ErrUnauthorized is the error for 401 from server
 	ErrUnauthorized = errors.New("Authentication failure")
 
-	// ErrClientAuth is the error for 404 from server
+	// ErrForbidden is the error for 403 from server
+	ErrForbidden = errors.New("You're not allowed to access this")
+
+	// ErrNotFound is the error for 404 from server
 	ErrNotFound = errors.New("Doesn't look like this exists")
 
 	// DefaultConduit is a wrapper for http.DefaultClient
@@ -73,19 +78,48 @@ func (c *Client) newPushRequest(cc context.Context, method, rawPath string, impe
 func (c *Client) makeRequest(cc context.Context, method, base, rawPath string, impersonate bool) *request {
 	baseURL, _ := url.Parse(base)
 
-	if token := c.Token; token != "" {
-		baseURL.User = url.UserPassword(token, "")
+	// Render URI Templates (RFC6570) to populate {acct}, etc
+	reqURL, err := c.renderURITemplate(baseURL.String() + rawPath)
+	if err != nil {
+		return &request{err: err}
 	}
 
-	out := baseURL.String()
-	out = out + rawPath
-
+	// Append impersonation, if requested
 	if as := c.Account; impersonate && as != "" {
-		out = out + "?" + url.Values{"as": []string{as}}.Encode()
+		query := url.Values{"as": []string{as}}.Encode()
+		if strings.Contains(reqURL, "?") {
+			reqURL = reqURL + "&" + query
+		} else {
+			reqURL = reqURL + "?" + query
+		}
 	}
 
-	req, err := c.conduit.NewRequest(cc, method, out, nil)
-	return &request{Request: req, err: err, conduit: c.conduit}
+	// Generate http.Request object using conduit
+	r, err := c.conduit.NewRequest(cc, method, reqURL, nil)
+
+	// Populate authentication, if present
+	if token := c.Token; r != nil && token != "" {
+		r.Header.Set("Authorization", token)
+	}
+
+	return &request{Request: r, err: err, conduit: c.conduit}
+}
+
+// Use URI Templates (RFC6570) to generate templates
+func (c *Client) renderURITemplate(pathTemplate string) (string, error) {
+	tmpl, err := uritemplate.New(pathTemplate)
+	if err != nil {
+		return "", err
+	}
+
+	acct := c.Account
+	if acct == "" {
+		acct = "me"
+	}
+
+	return tmpl.Expand(uritemplate.Values{
+		"acct": uritemplate.String(acct),
+	})
 }
 
 // API Request to be executed on client
