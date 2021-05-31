@@ -129,13 +129,28 @@ type request struct {
 	conduit
 }
 
-// Fetch and decode JSON from Gemfury with Authentication, returns expiry and error
-func (r *request) doJSON(data interface{}) error {
+// Common request processing (standard semantics for closing resp.Body)
+func (r *request) doCommon() (*http.Response, error) {
 	if r.err != nil {
-		return r.err
+		return nil, r.err
 	}
 
 	resp, err := r.conduit.Do(r.Request)
+	if err != nil {
+		return resp, err
+	}
+
+	if err := StatusCodeToError(resp.StatusCode); err != nil {
+		resp.Body.Close()
+		return resp, err
+	}
+
+	return resp, nil
+}
+
+// Fetch and decode JSON from Gemfury with Authentication, returns expiry and error
+func (r *request) doJSON(data interface{}) error {
+	resp, err := r.doCommon()
 	if err != nil {
 		r.err = err
 		return err
@@ -143,16 +158,26 @@ func (r *request) doJSON(data interface{}) error {
 
 	defer resp.Body.Close()
 
-	if err := StatusCodeToError(resp.StatusCode); err != nil {
-		r.err = err
-		return err
-	}
-
 	if resp.StatusCode == 204 || data == nil {
 		return nil
 	}
 
-	return json.NewDecoder(resp.Body).Decode(data)
+	r.err = json.NewDecoder(resp.Body).Decode(data)
+	return r.err
+}
+
+// Create Gemfury API request, and then stream output
+func (r *request) doWithOutput(out io.Writer) error {
+	resp, err := r.doCommon()
+	if err != nil {
+		r.err = err
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	_, r.err = io.Copy(out, resp.Body)
+	return r.err
 }
 
 // Wrapper for net/http and http.Client

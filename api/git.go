@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"io"
 	"net/url"
 )
 
@@ -18,4 +19,11 @@ func (c *Client) GitRename(cc context.Context, repo, newName string) error {
 	path = path + "?repo[name]=" + url.QueryEscape(newName)
 	req := c.newRequest(cc, "PATCH", path, false)
 	return req.doJSON(nil)
+}
+
+// GitRename renames a Gemfury Git repository
+func (c *Client) GitRebuild(cc context.Context, out io.Writer, repo string) error {
+	path := "/git/repos/{acct}/" + url.PathEscape(repo) + "/builds"
+	req := c.newRequest(cc, "POST", path, false)
+	return req.doWithOutput(out)
 }

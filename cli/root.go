@@ -29,6 +29,7 @@ func NewRootAndContext() (*cobra.Command, context.Context) {
 	rootCmd.AddCommand(NewCmdWhoAmI())
 	rootCmd.AddCommand(NewCmdSharingAdd())
 	rootCmd.AddCommand(NewCmdSharingRemove())
+	rootCmd.AddCommand(NewCmdGitRebuild())
 	rootCmd.AddCommand(NewCmdGitRename())
 	rootCmd.AddCommand(NewCmdGitReset())
 
