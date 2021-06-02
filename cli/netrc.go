@@ -4,8 +4,10 @@ import (
 	"github.com/bgentry/go-netrc/netrc"
 	"github.com/gemfury/cli/api"
 
+	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -36,7 +38,7 @@ func netrcAuth() (string, error) {
 	// Load up the netrc file
 	net, err := netrc.ParseFile(path)
 	if err != nil {
-		return "", fmt.Errorf("Error parsing netrc file %q: %w", path, err)
+		return "", fmt.Errorf("Error reading .netrc file %q: %w", path, err)
 	}
 
 	machine := net.FindMachine("api.fury.io")
@@ -45,6 +47,29 @@ func netrcAuth() (string, error) {
 	}
 
 	return machine.Password, nil
+}
+
+func netrcWipe(machines []string) error {
+	path, err := netrcPath()
+	if err != nil {
+		return err
+	}
+
+	// Load up the .netrc file
+	net, err := netrc.ParseFile(path)
+	if err != nil {
+		return fmt.Errorf("Error reading .netrc file %q: %w", path, err)
+	}
+
+	// Remove Gemfury machines
+	for _, m := range machines {
+		net.RemoveMachine(m)
+	}
+
+	// Write new .netrc file
+	out, _ := net.MarshalText()
+	out = bytes.TrimSpace(out)
+	return ioutil.WriteFile(path, out, 0600)
 }
 
 func netrcPath() (string, error) {
