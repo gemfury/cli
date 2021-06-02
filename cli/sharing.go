@@ -7,10 +7,23 @@ import (
 	"log"
 )
 
+// Root for sharing/collaboration subcommands
+func NewCmdSharingRoot() *cobra.Command {
+	gitCmd := &cobra.Command{
+		Use:   "sharing",
+		Short: "Collaboration commands",
+	}
+
+	gitCmd.AddCommand(NewCmdSharingAdd())
+	gitCmd.AddCommand(NewCmdSharingRemove())
+
+	return gitCmd
+}
+
 // NewCmdSharingAdd generates the Cobra command for "sharing:add"
 func NewCmdSharingAdd() *cobra.Command {
 	addCmd := &cobra.Command{
-		Use:   "sharing:add EMAIL",
+		Use:   "add EMAIL",
 		Short: "Add a collaborator",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
@@ -44,7 +57,7 @@ func NewCmdSharingAdd() *cobra.Command {
 // NewCmdSharingRemove generates the Cobra command for "sharing:add"
 func NewCmdSharingRemove() *cobra.Command {
 	addCmd := &cobra.Command{
-		Use:   "sharing:remove EMAIL",
+		Use:   "remove EMAIL",
 		Short: "Remove a collaborator",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {

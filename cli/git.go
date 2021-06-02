@@ -6,10 +6,24 @@ import (
 	"os"
 )
 
+// Root for Git subcommands
+func NewCmdGitRoot() *cobra.Command {
+	gitCmd := &cobra.Command{
+		Use:   "git",
+		Short: "Git repository commands",
+	}
+
+	gitCmd.AddCommand(NewCmdGitRebuild())
+	gitCmd.AddCommand(NewCmdGitRename())
+	gitCmd.AddCommand(NewCmdGitReset())
+
+	return gitCmd
+}
+
 // NewCmdGitReset generates the Cobra command for "git:reset"
 func NewCmdGitReset() *cobra.Command {
 	resetCmd := &cobra.Command{
-		Use:   "git:reset REPO",
+		Use:   "reset REPO",
 		Short: "Remove Git repository",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
@@ -38,7 +52,7 @@ func NewCmdGitReset() *cobra.Command {
 // NewCmdGitRename generates the Cobra command for "git:reset"
 func NewCmdGitRename() *cobra.Command {
 	renameCmd := &cobra.Command{
-		Use:   "git:rename REPO NEWNAME",
+		Use:   "rename REPO NEWNAME",
 		Short: "Rename a Git repository",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 2 {
@@ -67,7 +81,7 @@ func NewCmdGitRename() *cobra.Command {
 // NewCmdGitConfigSet sets build configuration keys
 func NewCmdGitRebuild() *cobra.Command {
 	rebuildCmd := &cobra.Command{
-		Use:   "git:rebuild REPO",
+		Use:   "rebuild REPO",
 		Short: "Run the builder on the repo",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
