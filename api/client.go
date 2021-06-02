@@ -31,6 +31,9 @@ var (
 
 	// Default "Accept" header for Gemfury API requests
 	hdrAcceptAPIv1 = "application/vnd.fury.v1"
+
+	// Default "User-Agent" header for Gemfury API requests
+	hdrUserAgent = "Gemfury Go-CLI ???"
 )
 
 // StatusCodeToError converts API response status to error code
@@ -196,6 +199,7 @@ func (c *conduitStandard) NewRequest(cc context.Context, url, method string, bod
 		return req, err
 	}
 
+	req.Header.Set("User-Agent", hdrUserAgent)
 	req.Header.Add("Accept", hdrAcceptAPIv1)
 	return req, nil
 }
