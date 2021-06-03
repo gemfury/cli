@@ -49,7 +49,23 @@ func netrcAuth() (string, error) {
 	return machine.Password, nil
 }
 
+func netrcAppend(machines []string, user, pass string) error {
+	return netrcUpdate(func(net *netrc.Netrc) {
+		for _, m := range machines {
+			net.NewMachine(m, user, pass, "")
+		}
+	})
+}
+
 func netrcWipe(machines []string) error {
+	return netrcUpdate(func(net *netrc.Netrc) {
+		for _, m := range machines {
+			net.RemoveMachine(m)
+		}
+	})
+}
+
+func netrcUpdate(update func(net *netrc.Netrc)) error {
 	path, err := netrcPath()
 	if err != nil {
 		return err
@@ -58,13 +74,11 @@ func netrcWipe(machines []string) error {
 	// Load up the .netrc file
 	net, err := netrc.ParseFile(path)
 	if err != nil {
-		return fmt.Errorf("Error reading .netrc file %q: %w", path, err)
+		return fmt.Errorf("Error reading .netrc %q: %w", path, err)
 	}
 
-	// Remove Gemfury machines
-	for _, m := range machines {
-		net.RemoveMachine(m)
-	}
+	// Apply updates
+	update(net)
 
 	// Write new .netrc file
 	out, _ := net.MarshalText()

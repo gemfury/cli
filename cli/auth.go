@@ -1,10 +1,16 @@
 package cli
 
 import (
+	"github.com/gemfury/cli/api"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 
 	"fmt"
+)
+
+// Machines for Gemfury in .netrc file
+var (
+	netrcMachines = []string{"api.fury.io", "git.fury.io"}
 )
 
 // NewCmdLogout invalidates session and wipes credentials
@@ -36,8 +42,7 @@ func NewCmdLogout() *cobra.Command {
 				return err
 			}
 
-			machines := []string{"api.fury.io", "git.fury.io"}
-			if err := netrcWipe(machines); err != nil {
+			if err := netrcWipe(netrcMachines); err != nil {
 				return err
 			}
 
@@ -47,4 +52,53 @@ func NewCmdLogout() *cobra.Command {
 	}
 
 	return logoutCmd
+}
+
+// NewCmdLogout invalidates session and wipes credentials
+func NewCmdLogin() *cobra.Command {
+	loginCmd := &cobra.Command{
+		Use:   "login",
+		Short: "Authenticate into Gemfury account",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Please enter your Gemfury credentials.")
+
+			ePrompt := promptui.Prompt{Label: "Email: "}
+			eResult, err := ePrompt.Run()
+			if err != nil {
+				return err
+			}
+
+			pPrompt := promptui.Prompt{Label: "Password: ", Mask: '*'}
+			pResult, err := pPrompt.Run()
+			if err != nil {
+				return err
+			}
+
+			c, err := newAPIClient(cmd.Context())
+			if err != nil {
+				return err
+			}
+
+			req := api.LoginRequest{Email: eResult, Password: pResult}
+			resp, err := c.Login(cmd.Context(), &req)
+			if err == api.ErrUnauthorized {
+				cmd.SilenceErrors = true
+				cmd.SilenceUsage = true
+				return err
+			} else if err != nil {
+				return err
+			}
+
+			// Save credentials in .netrc
+			err = netrcAppend(netrcMachines, resp.User.Email, resp.Token)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("You are logged in as %q\n", resp.User.Name)
+			return nil
+		},
+	}
+
+	return loginCmd
 }

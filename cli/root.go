@@ -30,6 +30,7 @@ func NewRootAndContext() (*cobra.Command, context.Context) {
 	rootCmd.AddCommand(NewCmdSharingRoot())
 	rootCmd.AddCommand(NewCmdGitRoot())
 	rootCmd.AddCommand(NewCmdLogout())
+	rootCmd.AddCommand(NewCmdLogin())
 
 	return rootCmd, cmdCtx
 }
