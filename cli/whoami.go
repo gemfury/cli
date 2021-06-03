@@ -1,8 +1,11 @@
 package cli
 
 import (
-	"fmt"
+	"github.com/gemfury/cli/api"
 	"github.com/spf13/cobra"
+
+	"context"
+	"fmt"
 )
 
 // NewCmdWhoAmI generates the Cobra command for "whoami"
@@ -11,12 +14,7 @@ func NewCmdWhoAmI() *cobra.Command {
 		Use:   "whoami",
 		Short: "Return current account",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := newAPIClient(cmd.Context())
-			if err != nil {
-				return err
-			}
-
-			resp, err := c.WhoAmI(cmd.Context())
+			resp, err := whoAMI(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -27,4 +25,13 @@ func NewCmdWhoAmI() *cobra.Command {
 	}
 
 	return whoCmd
+}
+
+func whoAMI(cc context.Context) (*api.AccountResponse, error) {
+	c, err := newAPIClient(cc)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.WhoAmI(cc)
 }

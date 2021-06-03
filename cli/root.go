@@ -17,6 +17,9 @@ func NewRootAndContext() (*cobra.Command, context.Context) {
 		Long:  `See https://gemfury.com/help/gemfury-cli`,
 	}
 
+	// Ensure authentication for all commands except "logout"
+	rootCmd.PersistentPreRunE = preRunCheckAuthentication
+
 	// Global flags (account, verbose, etc)
 	rootFlagSet := rootCmd.PersistentFlags()
 	rootFlagSet.StringVar(&flags.AuthToken, "api-token", "", "Inline authentication token")
