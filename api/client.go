@@ -3,11 +3,13 @@ package api
 import (
 	"github.com/yosida95/uritemplate/v3"
 
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -108,6 +110,18 @@ func (c *Client) makeRequest(cc context.Context, method, base, rawPath string, i
 	return &request{Request: r, err: err, conduit: c.conduit}
 }
 
+// Populate API request body as JSON with the proper Content-Type header
+func (c *Client) prepareJSONBody(req *request, data interface{}) error {
+	body, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Body = ioutil.NopCloser(bytes.NewReader(body))
+	return nil
+}
+
 // Use URI Templates (RFC6570) to generate templates
 func (c *Client) renderURITemplate(pathTemplate string) (string, error) {
 	tmpl, err := uritemplate.New(pathTemplate)
@@ -151,22 +165,33 @@ func (r *request) doCommon() (*http.Response, error) {
 	return resp, nil
 }
 
-// Fetch and decode JSON from Gemfury with Authentication, returns expiry and error
+// Fetch and decode JSON from Gemfury with Authentication, returns error
 func (r *request) doJSON(data interface{}) error {
+	_, err := r.doPaginatedJSON(data)
+	return err
+}
+
+// Fetch and decode JSON from Gemfury with Authentication, returns pagination and error
+func (r *request) doPaginatedJSON(data interface{}) (*PaginationResponse, error) {
 	resp, err := r.doCommon()
 	if err != nil {
 		r.err = err
-		return err
+		return nil, err
 	}
 
 	defer resp.Body.Close()
 
+	// Parse pagination headers
+	pagination := parsePagination(resp)
+
+	// No body expected or no body given
 	if resp.StatusCode == 204 || data == nil {
-		return nil
+		return pagination, nil
 	}
 
+	// Decode body JSON into provided data structure
 	r.err = json.NewDecoder(resp.Body).Decode(data)
-	return r.err
+	return pagination, r.err
 }
 
 // Create Gemfury API request, and then stream output

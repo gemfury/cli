@@ -1,10 +1,7 @@
 package api
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"io/ioutil"
 )
 
 // Logout deletes the CLI token on the server
@@ -15,17 +12,14 @@ func (c *Client) Logout(cc context.Context) error {
 
 // Logout deletes the CLI token on the server
 func (c *Client) Login(cc context.Context, loginReq *LoginRequest) (*LoginResponse, error) {
-	body, err := json.Marshal(loginReq)
-	if err != nil {
+	req := c.newRequest(cc, "POST", "/login", false)
+
+	if err := c.prepareJSONBody(req, loginReq); err != nil {
 		return nil, err
 	}
 
-	req := c.newRequest(cc, "POST", "/login", false)
-	req.Header.Set("Content-Type", "application/json")
-	req.Body = ioutil.NopCloser(bytes.NewReader(body))
 	resp := &LoginResponse{}
-
-	err = req.doJSON(resp)
+	err := req.doJSON(resp)
 	return resp, err
 }
 
