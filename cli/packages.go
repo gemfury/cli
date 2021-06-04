@@ -1,13 +1,16 @@
 package cli
 
 import (
+	"github.com/briandowns/spinner"
 	"github.com/gemfury/cli/api"
 	"github.com/spf13/cobra"
 
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
+	"time"
 )
 
 // Root for sharing/collaboration subcommands
@@ -107,8 +110,16 @@ func listVersions(cmd *cobra.Command, args []string) error {
 
 func iterateAllPages(cc context.Context, fn func(req *api.PaginationRequest) (*api.PaginationResponse, error)) error {
 	pageReq := api.PaginationRequest{
-		Limit: 50,
+		Limit: 100,
 	}
+
+	var spin *spinner.Spinner
+	defer func() {
+		if spin != nil {
+			spin.Stop()
+			fmt.Printf("\r")
+		}
+	}()
 
 	for {
 		pageResp, err := fn(&pageReq)
@@ -119,6 +130,12 @@ func iterateAllPages(cc context.Context, fn func(req *api.PaginationRequest) (*a
 		pageReq.Page = ""
 		if pageResp != nil {
 			pageReq.Page = pageResp.NextPageCursor()
+			if spin == nil { // Start spinner on second page
+				spin = spinner.New(spinner.CharSets[11], 100*time.Millisecond, spinner.WithWriter(os.Stderr))
+				spin.FinalMSG = "\r" + strings.Repeat(" ", 20) + "\r"
+				spin.Suffix = " Fetching ..."
+				spin.Start()
+			}
 		}
 
 		if pageReq.Page == "" || cc.Err() != nil {

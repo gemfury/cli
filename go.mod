@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d
+	github.com/briandowns/spinner v1.15.0
 	github.com/cheggaaa/pb/v3 v3.0.8
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/manifoldco/promptui v0.8.0
