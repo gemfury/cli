@@ -16,7 +16,7 @@ var (
 func NewCmdLogout() *cobra.Command {
 	logoutCmd := &cobra.Command{
 		Use:   "logout",
-		Short: "Clear & invalidate CLI session credentials",
+		Short: "Clear CLI session credentials",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if token, err := netrcAuth(); err != nil {
 				return err

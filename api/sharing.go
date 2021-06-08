@@ -32,6 +32,21 @@ func (c *Client) Members(cc context.Context, body *PaginationRequest) (*MembersR
 	return &resp, err
 }
 
+// Collaborations returns the details of collaborations for the Viewer
+func (c *Client) Collaborations(cc context.Context, body *PaginationRequest) (*MembersResponse, error) {
+	req := c.newRequest(cc, "GET", "/collaborations", true)
+
+	if body != nil {
+		c.prepareJSONBody(req, body)
+	}
+
+	resp := MembersResponse{}
+	pagination, err := req.doPaginatedJSON(&resp.Members)
+	resp.Pagination = pagination
+
+	return &resp, err
+}
+
 // MembersResponse represents details from Members API call
 type MembersResponse struct {
 	Pagination *PaginationResponse

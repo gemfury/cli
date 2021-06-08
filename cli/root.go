@@ -33,6 +33,7 @@ func NewRootAndContext() (*cobra.Command, context.Context) {
 	rootCmd.AddCommand(NewCmdPackages())
 	rootCmd.AddCommand(NewCmdVersions())
 	rootCmd.AddCommand(NewCmdSharingRoot())
+	rootCmd.AddCommand(NewCmdAccounts())
 	rootCmd.AddCommand(NewCmdGitRoot())
 	rootCmd.AddCommand(NewCmdLogout())
 	rootCmd.AddCommand(NewCmdLogin())
