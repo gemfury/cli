@@ -12,7 +12,7 @@ import (
 func NewCmdWhoAmI() *cobra.Command {
 	whoCmd := &cobra.Command{
 		Use:   "whoami",
-		Short: "Return current account",
+		Short: "Show current account",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resp, err := whoAMI(cmd.Context())
 			if err != nil {

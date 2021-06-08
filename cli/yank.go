@@ -11,7 +11,7 @@ func NewCmdYank() *cobra.Command {
 
 	yankCmd := &cobra.Command{
 		Use:   "yank PACKAGE VERSION",
-		Short: "Remove a package version from account",
+		Short: "Remove a package version",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return fmt.Errorf("Please specify at least one package")

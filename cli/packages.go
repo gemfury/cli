@@ -18,7 +18,7 @@ func NewCmdPackages() *cobra.Command {
 	return &cobra.Command{
 		Use:     "packages",
 		Aliases: []string{"list"},
-		Short:   "Package listing",
+		Short:   "List packages in this account",
 		RunE:    listPackages,
 	}
 }
@@ -26,7 +26,7 @@ func NewCmdPackages() *cobra.Command {
 func NewCmdVersions() *cobra.Command {
 	return &cobra.Command{
 		Use:   "versions PACKAGE",
-		Short: "Package versions",
+		Short: "List versions for a package",
 		RunE:  listVersions,
 	}
 }
