@@ -14,13 +14,25 @@ import (
 	"strings"
 )
 
-// Root for sharing/collaboration subcommands
+// NewCmdBeta creates a Cobra command for "beta"
+func NewCmdBeta() *cobra.Command {
+	betaCmd := &cobra.Command{
+		Hidden: true,
+		Use:    "beta",
+		Short:  "Experimental features",
+	}
+
+	betaCmd.AddCommand(NewCmdBackup())
+
+	return betaCmd
+}
+
+// NewCmdBackup creates a Cobra command for "backup"
 func NewCmdBackup() *cobra.Command {
 	return &cobra.Command{
-		Hidden: true,
-		Use:    "backup DIR",
-		Short:  "Save all packages to directory",
-		RunE:   backupEverything,
+		Use:   "backup DIR",
+		Short: "Save all files to a directory",
+		RunE:  backupEverything,
 	}
 }
 

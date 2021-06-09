@@ -27,19 +27,20 @@ func NewRootAndContext() (*cobra.Command, context.Context) {
 	rootCmd.SetGlobalNormalizationFunc(globalFlagNormalization)
 
 	// Connect child commands
-	rootCmd.AddCommand(NewCmdPush())
-	rootCmd.AddCommand(NewCmdYank())
-	rootCmd.AddCommand(NewCmdWhoAmI())
-	rootCmd.AddCommand(NewCmdPackages())
-	rootCmd.AddCommand(NewCmdVersions())
-	rootCmd.AddCommand(NewCmdSharingRoot())
-	rootCmd.AddCommand(NewCmdAccounts())
-	rootCmd.AddCommand(NewCmdGitRoot())
-	rootCmd.AddCommand(NewCmdLogout())
-	rootCmd.AddCommand(NewCmdLogin())
-
-	// Hidden commands for CS requests, etc
-	rootCmd.AddCommand(NewCmdBackup())
+	rootCmd.AddCommand(
+		NewCmdPush(),
+		NewCmdYank(),
+		NewCmdWhoAmI(),
+		NewCmdPackages(),
+		NewCmdVersions(),
+		NewCmdSharingRoot(),
+		NewCmdAccounts(),
+		NewCmdGitRoot(),
+		NewCmdLogout(),
+		NewCmdLogin(),
+		// Beta/hidden experiments, etc
+		NewCmdBeta(),
+	)
 
 	return rootCmd, cmdCtx
 }
