@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"context"
+	"crypto/sha512"
 	"fmt"
 	"io"
 	"os"
@@ -63,12 +64,17 @@ func backupEverything(cmd *cobra.Command, args []string) error {
 
 func backupVersion(cc context.Context, client *api.Client, v *api.Version, destDir string) error {
 	slash := string(filepath.Separator)
-	fName := strings.ReplaceAll(v.Filename, slash, "_")
-	pName := strings.ReplaceAll(v.Package.Name, slash, "_")
-	subPath := slash + v.Package.Kind + slash + pName + slash + fName
-	subPath = filepath.Clean(subPath) // Final safety sanitizing
+	pkgName := strings.ReplaceAll(v.Package.Name, slash, "_")
+	fileName := strings.ReplaceAll(v.ID+"_"+v.Filename, slash, "_")
+	subPath := slash + v.Package.Kind + slash + pkgName + slash + fileName
+
+	// Sanitize and join destDir
+	subPath = filepath.Clean(subPath)
 	path := filepath.Clean(filepath.Join(destDir, subPath))
 	pkgDir := filepath.Dir(path)
+
+	// Status string template for inserting status emoji
+	statusFmt := fmt.Sprintf("%-16s%%s %s", v.ID, strings.TrimPrefix(subPath, slash))
 
 	// Verify or create package directory
 	if s, err := os.Stat(pkgDir); os.IsNotExist(err) {
@@ -79,7 +85,12 @@ func backupVersion(cc context.Context, client *api.Client, v *api.Version, destD
 		return fmt.Errorf("Problem creating directory %q", pkgDir)
 	}
 
-	// Open file for writing. It must not exist.
+	// Check if file exists, and validate checksum
+	if s, err := os.Stat(path); err == nil && !s.IsDir() {
+		return backupValidate(v, path, statusFmt)
+	}
+
+	// Open file for writing. It must not exist, otherwise fail
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
@@ -95,8 +106,7 @@ func backupVersion(cc context.Context, client *api.Client, v *api.Version, destD
 
 	// Wrap with status bar
 	bar := pbFactory.Start64(size)
-	verID := fmt.Sprintf("%-16s", v.ID)
-	bar = bar.Set("prefix", verID+"⌛ "+subPath+" ")
+	bar = bar.Set("prefix", fmt.Sprintf(statusFmt+" ", "⌛"))
 	bar = bar.Set(pb.CleanOnFinish, true)
 	reader := bar.NewProxyReader(body)
 
@@ -106,8 +116,35 @@ func backupVersion(cc context.Context, client *api.Client, v *api.Version, destD
 
 	// Status output
 	if err == nil {
-		fmt.Printf("%s💾 %s\n", verID, subPath)
+		fmt.Printf(statusFmt+"\n", "💾")
 	}
 
 	return err
+}
+
+// Validate checksum for file
+func backupValidate(v *api.Version, path, statusFmt string) error {
+	if v == nil || v.Digests.SHA512 == "" {
+		fmt.Printf(statusFmt+" (WARNING: No checksum provided by API)\n", "❓")
+		return nil // Unlikely, API should always have digests (theoretically)
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+
+	hash := sha512.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return err
+	}
+
+	sum := fmt.Sprintf("%x", hash.Sum(nil))
+	if exp := v.Digests.SHA512; exp != sum {
+		fmt.Printf(statusFmt+"\n", "❌")
+		return fmt.Errorf("Checksum failed")
+	}
+
+	fmt.Printf(statusFmt+"\n", "✅")
+	return nil
 }

@@ -81,6 +81,15 @@ type Version struct {
 	CreatedAt   time.Time        `json:"created_at"`
 	DownloadURL string           `json:"download_url"`
 	Filename    string           `json:"filename"`
+	Digests     VersionDigests   `json:"digests`
+}
+
+// VersionDigests represents Version's digest field
+type VersionDigests struct {
+	SHA512 string `json:"sha512"`
+	SHA256 string `json:"sha256"`
+	SHA1   string `json:"sha1"`
+	MD5    string `json:"md5"`
 }
 
 func (v Version) DisplayCreatedBy() string {
