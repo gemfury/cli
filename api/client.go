@@ -23,7 +23,7 @@ var (
 	ErrUnauthorized = errors.New("Authentication failure")
 
 	// ErrForbidden is the error for 403 from server
-	ErrForbidden = errors.New("You're not allowed to access this")
+	ErrForbidden = errors.New("You're not allowed to do this")
 
 	// ErrNotFound is the error for 404 from server
 	ErrNotFound = errors.New("Doesn't look like this exists")
@@ -36,6 +36,9 @@ var (
 
 	// Default "User-Agent" header for Gemfury API requests
 	hdrUserAgent = "Gemfury Go-CLI ???"
+
+	// Default API endpoint
+	defaultEndpoint = "https://api.fury.io"
 )
 
 // StatusCodeToError converts API response status to error code
@@ -73,7 +76,7 @@ func NewClient(token, account string) *Client {
 }
 
 func (c *Client) newRequest(cc context.Context, method, rawPath string, impersonate bool) *request {
-	return c.makeRequest(cc, method, "https://api.fury.io", rawPath, impersonate)
+	return c.makeRequest(cc, method, defaultEndpoint, rawPath, impersonate)
 }
 
 func (c *Client) newPushRequest(cc context.Context, method, rawPath string, impersonate bool) *request {

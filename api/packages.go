@@ -74,11 +74,13 @@ func (p Package) DisplayVersion() string {
 
 // VersionResponse represents Version JSON
 type Version struct {
-	ID        string           `json:"id"`
-	Version   string           `json:"version"`
-	Package   *Package         `json:"package,omitempty"`
-	CreatedBy *AccountResponse `json:"created_by"`
-	CreatedAt time.Time        `json:"created_at"`
+	ID          string           `json:"id"`
+	Version     string           `json:"version"`
+	Package     *Package         `json:"package,omitempty"`
+	CreatedBy   *AccountResponse `json:"created_by"`
+	CreatedAt   time.Time        `json:"created_at"`
+	DownloadURL string           `json:"download_url"`
+	Filename    string           `json:"filename"`
 }
 
 func (v Version) DisplayCreatedBy() string {

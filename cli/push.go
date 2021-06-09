@@ -18,6 +18,11 @@ const (
 	pbTemplate pb.ProgressBarTemplate = `{{string . "prefix"}}{{ bar . "[" "=" (cycle . "⠁" "⠂" "⠄" "⠂") " " "]" }} {{percent . }}`
 )
 
+var (
+	// "Factory" for Gemfury-style progress bars
+	pbFactory = pb.ProgressBarTemplate(pbTemplate)
+)
+
 // NewCmdPush generates the Cobra command for "push"
 func NewCmdPush() *cobra.Command {
 	var noProgress bool
@@ -35,9 +40,6 @@ func NewCmdPush() *cobra.Command {
 			if err != nil {
 				return err
 			}
-
-			// Initialize progress bar template
-			pbFactory := pb.ProgressBarTemplate(pbTemplate)
 
 			// Upload each file and collect errors
 			var multiErr *multierror.Error

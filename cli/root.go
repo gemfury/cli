@@ -38,6 +38,9 @@ func NewRootAndContext() (*cobra.Command, context.Context) {
 	rootCmd.AddCommand(NewCmdLogout())
 	rootCmd.AddCommand(NewCmdLogin())
 
+	// Hidden commands for CS requests, etc
+	rootCmd.AddCommand(NewCmdBackup())
+
 	return rootCmd, cmdCtx
 }
 

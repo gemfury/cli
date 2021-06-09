@@ -109,6 +109,10 @@ func listVersions(cmd *cobra.Command, args []string) error {
 }
 
 func iterateAllPages(cc context.Context, fn func(req *api.PaginationRequest) (*api.PaginationResponse, error)) error {
+	return iterateAll(cc, true, fn)
+}
+
+func iterateAll(cc context.Context, showSpinner bool, fn func(req *api.PaginationRequest) (*api.PaginationResponse, error)) error {
 	pageReq := api.PaginationRequest{
 		Limit: 100,
 	}
@@ -130,7 +134,7 @@ func iterateAllPages(cc context.Context, fn func(req *api.PaginationRequest) (*a
 		pageReq.Page = ""
 		if pageResp != nil {
 			pageReq.Page = pageResp.NextPageCursor()
-			if spin == nil { // Start spinner on second page
+			if spin == nil && showSpinner { // Start spinner on second page
 				spin = spinner.New(spinner.CharSets[11], 100*time.Millisecond, spinner.WithWriter(os.Stderr))
 				spin.FinalMSG = "\r" + strings.Repeat(" ", 20) + "\r"
 				spin.Suffix = " Fetching ..."
