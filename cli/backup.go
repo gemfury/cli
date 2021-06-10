@@ -3,15 +3,21 @@ package cli
 import (
 	"github.com/cheggaaa/pb/v3"
 	"github.com/gemfury/cli/api"
+	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 
 	"context"
 	"crypto/sha512"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+)
+
+var (
+	backupSkip = fmt.Errorf("Skip file")
 )
 
 // NewCmdBeta creates a Cobra command for "beta"
@@ -98,8 +104,10 @@ func backupVersion(cc context.Context, client *api.Client, v *api.Version, destD
 	}
 
 	// Check if file exists, and validate checksum
-	if s, err := os.Stat(path); err == nil && !s.IsDir() {
-		return backupValidate(v, path, statusFmt)
+	if err := backupCheckPath(v, path, statusFmt); errors.Is(err, backupSkip) {
+		return nil // Checksum match => skip download
+	} else if err != nil {
+		return err
 	}
 
 	// Open file for writing. It must not exist, otherwise fail
@@ -135,16 +143,26 @@ func backupVersion(cc context.Context, client *api.Client, v *api.Version, destD
 }
 
 // Validate checksum for file
-func backupValidate(v *api.Version, path, statusFmt string) error {
+func backupCheckPath(v *api.Version, path, statusFmt string) error {
+	// Check if file exists, and validate checksum if it does
+	if s, err := os.Stat(path); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return err
+	} else if s.IsDir() {
+		return fmt.Errorf("Dir exists: %s", path)
+	}
+
 	if v == nil || v.Digests.SHA512 == "" {
 		fmt.Printf(statusFmt+" (WARNING: No checksum provided by API)\n", "❓")
-		return nil // Unlikely, API should always have digests (theoretically)
+		return backupSkip // API should always have digests (theoretically)
 	}
 
 	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 
 	hash := sha512.New()
 	if _, err := io.Copy(hash, file); err != nil {
@@ -153,10 +171,24 @@ func backupValidate(v *api.Version, path, statusFmt string) error {
 
 	sum := fmt.Sprintf("%x", hash.Sum(nil))
 	if exp := v.Digests.SHA512; exp != sum {
-		fmt.Printf(statusFmt+"\n", "❌")
+		fmt.Printf(statusFmt+" (CHECKSUM MISMATCH)\n", "❌")
+		prompt := promptui.Prompt{
+			Label:   "Do you want to delete and redownload? [y/N]",
+			Default: "N",
+		}
+
+		result, err := prompt.Run()
+		if err != nil {
+			return err
+		} else if result == "Y" || result == "y" {
+			file.Close()
+			os.Remove(path)
+			return nil
+		}
+
 		return fmt.Errorf("Checksum failed")
 	}
 
 	fmt.Printf(statusFmt+"\n", "✅")
-	return nil
+	return backupSkip
 }
