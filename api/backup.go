@@ -4,12 +4,18 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 )
 
 // Listing all versions for an account for backup purposes, etc
-func (c *Client) DumpVersions(cc context.Context, body *PaginationRequest) (*VersionsResponse, error) {
-	req := c.newRequest(cc, "GET", "/versions/$dump", true)
+func (c *Client) DumpVersions(cc context.Context, body *PaginationRequest, kindFilter string) (*VersionsResponse, error) {
+	path := "/versions/$dump"
+	if kindFilter != "" {
+		path = path + "?kind=" + url.QueryEscape(kindFilter)
+	}
+
+	req := c.newRequest(cc, "GET", path, true)
 
 	if body != nil {
 		c.prepareJSONBody(req, body)

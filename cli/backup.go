@@ -35,14 +35,23 @@ func NewCmdBeta() *cobra.Command {
 
 // NewCmdBackup creates a Cobra command for "backup"
 func NewCmdBackup() *cobra.Command {
-	return &cobra.Command{
+	var kindFlag string
+
+	backupCmd := &cobra.Command{
 		Use:   "backup DIR",
 		Short: "Save all files to a directory",
-		RunE:  backupEverything,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return backupEverything(cmd, args, kindFlag)
+		},
 	}
+
+	// Flags and options
+	backupCmd.Flags().StringVar(&kindFlag, "kind", "", "Filter to one kind of package")
+
+	return backupCmd
 }
 
-func backupEverything(cmd *cobra.Command, args []string) error {
+func backupEverything(cmd *cobra.Command, args []string, kindFlag string) error {
 	if len(args) != 1 {
 		return fmt.Errorf("Please specify the destination")
 	}
@@ -64,13 +73,17 @@ func backupEverything(cmd *cobra.Command, args []string) error {
 
 	// Paginate over package listings until no more pages
 	return iterateAll(cc, false, func(pageReq *api.PaginationRequest) (*api.PaginationResponse, error) {
-		resp, err := c.DumpVersions(cc, pageReq)
+		resp, err := c.DumpVersions(cc, pageReq, kindFlag)
 		if err != nil {
 			return nil, err
 		}
 
 		// Save each version to disk
 		for _, v := range resp.Versions {
+			if kindFlag != "" && kindFlag != v.Package.Kind {
+				continue
+			}
+
 			if err := backupVersion(cc, c, v, destDir); err != nil {
 				return nil, err
 			}
