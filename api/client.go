@@ -28,17 +28,20 @@ var (
 	// ErrNotFound is the error for 404 from server
 	ErrNotFound = errors.New("Doesn't look like this exists")
 
-	// DefaultConduit is a wrapper for http.DefaultClient
-	DefaultConduit = &conduitStandard{http.DefaultClient}
-
 	// Default "Accept" header for Gemfury API requests
 	hdrAcceptAPIv1 = "application/vnd.fury.v1"
 
 	// Default "User-Agent" header for Gemfury API requests
-	hdrUserAgent = "Gemfury Go-CLI ???"
+	hdrUserAgent = "Gemfury Go-CLI %s"
 
 	// Default API endpoint
 	defaultEndpoint = "https://api.fury.io"
+
+	// DefaultConduit is a wrapper for http.DefaultClient
+	DefaultConduit = &conduitStandard{
+		Client:  http.DefaultClient,
+		Version: "???",
+	}
 )
 
 // StatusCodeToError converts API response status to error code
@@ -61,6 +64,7 @@ func StatusCodeToError(s int) error {
 
 // Client is the main entrypoint for interacting with Gemfury API
 type Client struct {
+	Version string
 	conduit conduit
 	Account string
 	Token   string
@@ -218,6 +222,7 @@ type conduit interface {
 }
 
 type conduitStandard struct {
+	Version string
 	*http.Client
 }
 
@@ -227,7 +232,7 @@ func (c *conduitStandard) NewRequest(cc context.Context, url, method string, bod
 		return req, err
 	}
 
-	req.Header.Set("User-Agent", hdrUserAgent)
+	req.Header.Set("User-Agent", fmt.Sprintf(hdrUserAgent, c.Version))
 	req.Header.Add("Accept", hdrAcceptAPIv1)
 	return req, nil
 }

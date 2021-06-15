@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/cli"
 
 	"fmt"
@@ -9,8 +10,17 @@ import (
 	"strings"
 )
 
+// See Makefile
+var (
+	GitDescribe string
+)
+
 func main() {
 	rootCmd, cmdCtx := cli.NewRootAndContext()
+
+	// Populate version strings everywhere
+	api.DefaultConduit.Version = GitDescribe
+	rootCmd.Version = GitDescribe
 
 	// Support for legacy (Ruby) CLI command
 	if args := convertLegacyArgs(os.Args); args != nil {
