@@ -1,0 +1,48 @@
+project_name: fury
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - binary: fury
+    main: ./cmd/fury
+    ldflags: -s -w -X main.Version={{.Version}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - 386
+      - arm
+      - arm64
+    goarm:
+      - 7
+    ignore:
+      - goos: darwin
+        goarch: 386
+
+archives:
+  - format: tar.gz
+    wrap_in_directory: false
+    format_overrides:
+      - goos: windows
+        format: zip
+    replacements:
+      amd64: 64bit
+      386: 32bit
+      arm: ARM
+      arm64: ARM64
+      darwin: macOS
+      linux: Linux
+      windows: Windows
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  skip: true
