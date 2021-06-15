@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,18 +15,6 @@ import (
 )
 
 var (
-	// ErrFuryServer is the error for 5xx server errors
-	ErrFuryServer = errors.New("Fury-API server error")
-
-	// ErrUnauthorized is the error for 401 from server
-	ErrUnauthorized = errors.New("Authentication failure")
-
-	// ErrForbidden is the error for 403 from server
-	ErrForbidden = errors.New("You're not allowed to do this")
-
-	// ErrNotFound is the error for 404 from server
-	ErrNotFound = errors.New("Doesn't look like this exists")
-
 	// Default "Accept" header for Gemfury API requests
 	hdrAcceptAPIv1 = "application/vnd.fury.v1"
 
@@ -44,27 +31,8 @@ var (
 	}
 )
 
-// StatusCodeToError converts API response status to error code
-func StatusCodeToError(s int) error {
-	switch {
-	case s == 401:
-		return ErrUnauthorized
-	case s == 403:
-		return ErrForbidden
-	case s == 404:
-		return ErrNotFound
-	case s >= 200 && s < 300:
-		return nil
-	case s >= 500:
-		return ErrFuryServer
-	default:
-		return fmt.Errorf(http.StatusText(s))
-	}
-}
-
 // Client is the main entrypoint for interacting with Gemfury API
 type Client struct {
-	Version string
 	conduit conduit
 	Account string
 	Token   string
@@ -164,7 +132,7 @@ func (r *request) doCommon() (*http.Response, error) {
 		return resp, err
 	}
 
-	if err := StatusCodeToError(resp.StatusCode); err != nil {
+	if err := DecodeResponseError(resp); err != nil {
 		resp.Body.Close()
 		return resp, err
 	}

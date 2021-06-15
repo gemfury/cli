@@ -84,8 +84,8 @@ func NewCmdPush() *cobra.Command {
 					fmt.Printf("%s- unauthorized\n", prefix)
 				} else if errors.Is(err, api.ErrForbidden) {
 					fmt.Printf("%s- no permission\n", prefix)
-				} else if err.Error() == "Conflict" {
-					fmt.Printf("%s- this version already exists\n", prefix)
+				} else if ue, ok := err.(api.UserError); ok {
+					fmt.Printf("%s- %s\n", prefix, ue.ShortError())
 				} else {
 					fmt.Printf("%s- error %q\n", prefix, err.Error())
 				}
