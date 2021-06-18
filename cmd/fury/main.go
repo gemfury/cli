@@ -10,17 +10,17 @@ import (
 	"strings"
 )
 
-// See Makefile
+// Populated by GoReleaser
 var (
-	GitDescribe string
+	Version = "dev"
 )
 
 func main() {
 	rootCmd, cmdCtx := cli.NewRootAndContext()
 
 	// Populate version strings everywhere
-	api.DefaultConduit.Version = GitDescribe
-	rootCmd.Version = GitDescribe
+	api.DefaultConduit.Version = Version
+	rootCmd.Version = Version
 
 	// Support for legacy (Ruby) CLI command
 	if args := convertLegacyArgs(os.Args); args != nil {

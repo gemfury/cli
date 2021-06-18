@@ -1,5 +1,5 @@
 GIT_DESCRIBE=$$(git describe --tags --always --match "v*")
-GOLDFLAGS="-X main.GitDescribe=$(GIT_DESCRIBE)"
+GOLDFLAGS="-X main.Version=$(GIT_DESCRIBE)"
 GO_CMD?=go
 
 bin: # creates the Fury CLI binaries for current platform
