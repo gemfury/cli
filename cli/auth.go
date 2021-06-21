@@ -4,8 +4,6 @@ import (
 	"github.com/gemfury/cli/api"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
-
-	"fmt"
 )
 
 // Hook for root command to ensure user is authenticated or prompt to login
@@ -23,7 +21,8 @@ func ensureAuthenticated(cmd *cobra.Command) (*api.AccountResponse, error) {
 		return nil, err
 	}
 
-	fmt.Println("Please enter your Gemfury credentials.")
+	term := ctxTerminal(cmd.Context())
+	term.Println("Please enter your Gemfury credentials.")
 
 	ePrompt := promptui.Prompt{Label: "Email: "}
 	eResult, err := ePrompt.Run()

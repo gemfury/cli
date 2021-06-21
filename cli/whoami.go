@@ -5,7 +5,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"context"
-	"fmt"
 )
 
 // NewCmdWhoAmI generates the Cobra command for "whoami"
@@ -19,7 +18,8 @@ func NewCmdWhoAmI() *cobra.Command {
 				return err
 			}
 
-			fmt.Printf("You are logged in as %q\n", resp.Name)
+			term := ctxTerminal(cmd.Context())
+			term.Printf("You are logged in as %q\n", resp.Name)
 			return nil
 		},
 	}

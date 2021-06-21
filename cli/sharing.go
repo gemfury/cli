@@ -6,7 +6,6 @@ import (
 
 	"fmt"
 	"log"
-	"os"
 	"text/tabwriter"
 )
 
@@ -26,6 +25,7 @@ func NewCmdSharingRoot() *cobra.Command {
 
 func listMembers(cmd *cobra.Command, args []string) error {
 	cc := cmd.Context()
+	term := ctxTerminal(cc)
 	c, err := newAPIClient(cc)
 	if err != nil {
 		return err
@@ -46,13 +46,13 @@ func listMembers(cmd *cobra.Command, args []string) error {
 
 	// Handle no packages
 	if len(members) == 0 {
-		fmt.Println("No members found for this account")
+		term.Println("No members found for this account")
 		return nil
 	}
 
 	// Print results
-	fmt.Printf("*** Collaborators ***\n")
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	term.Printf("*** Collaborators ***\n")
+	w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "name\trole\n")
 
 	for _, m := range members {
@@ -74,6 +74,7 @@ func NewCmdSharingAdd() *cobra.Command {
 			}
 
 			cc := cmd.Context()
+			term := ctxTerminal(cc)
 			c, err := newAPIClient(cc)
 			if err != nil {
 				return err
@@ -87,7 +88,7 @@ func NewCmdSharingAdd() *cobra.Command {
 					continue
 				}
 
-				fmt.Printf("Invited %q as a collaborator\n", name)
+				term.Printf("Invited %q as a collaborator\n", name)
 			}
 
 			return nil
@@ -108,6 +109,7 @@ func NewCmdSharingRemove() *cobra.Command {
 			}
 
 			cc := cmd.Context()
+			term := ctxTerminal(cc)
 			c, err := newAPIClient(cc)
 			if err != nil {
 				return err
@@ -121,7 +123,7 @@ func NewCmdSharingRemove() *cobra.Command {
 					continue
 				}
 
-				fmt.Printf("Removed %q as a collaborator\n", name)
+				term.Printf("Removed %q as a collaborator\n", name)
 			}
 
 			return nil
@@ -138,6 +140,7 @@ func NewCmdAccounts() *cobra.Command {
 		Short: "Listing of your collaborations",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cc := cmd.Context()
+			term := ctxTerminal(cc)
 			c, err := newAPIClient(cc)
 			if err != nil {
 				return err
@@ -158,12 +161,12 @@ func NewCmdAccounts() *cobra.Command {
 
 			// Handle no packages
 			if len(members) == 0 {
-				fmt.Println("No collaborations found for this account")
+				term.Println("No collaborations found for this account")
 				return nil
 			}
 
 			// Print results
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
 			fmt.Fprintf(w, "name\tkind\trole\n")
 
 			for _, m := range members {

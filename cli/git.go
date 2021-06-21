@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"github.com/spf13/cobra"
-	"os"
 )
 
 // Root for Git subcommands
@@ -26,6 +25,8 @@ func NewCmdGitReset() *cobra.Command {
 		Use:   "reset REPO",
 		Short: "Remove Git repository",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			term := ctxTerminal(cmd.Context())
+
 			if len(args) != 1 {
 				return fmt.Errorf("Please specify a repository")
 			}
@@ -41,7 +42,7 @@ func NewCmdGitReset() *cobra.Command {
 				return err
 			}
 
-			fmt.Printf("Removed %s repository\n", args[0])
+			term.Printf("Removed %s repository\n", args[0])
 			return nil
 		},
 	}
@@ -55,6 +56,8 @@ func NewCmdGitRename() *cobra.Command {
 		Use:   "rename REPO NEWNAME",
 		Short: "Rename a Git repository",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			term := ctxTerminal(cmd.Context())
+
 			if len(args) != 2 {
 				return fmt.Errorf("Please specify a repository")
 			}
@@ -70,7 +73,7 @@ func NewCmdGitRename() *cobra.Command {
 				return err
 			}
 
-			fmt.Printf("Renamed %s repository to %s\n", args[0], args[1])
+			term.Printf("Renamed %s repository to %s\n", args[0], args[1])
 			return nil
 		},
 	}
@@ -84,6 +87,8 @@ func NewCmdGitRebuild() *cobra.Command {
 		Use:   "rebuild REPO",
 		Short: "Run the builder on the repo",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			term := ctxTerminal(cmd.Context())
+
 			if len(args) != 1 {
 				return fmt.Errorf("Please specify a repository")
 			}
@@ -94,8 +99,8 @@ func NewCmdGitRebuild() *cobra.Command {
 				return err
 			}
 
-			fmt.Printf("Building %s repository...\n", args[0])
-			err = c.GitRebuild(cc, os.Stdout, args[0])
+			term.Printf("Building %s repository...\n", args[0])
+			err = c.GitRebuild(cc, term.IOOut(), args[0])
 			if err != nil {
 				return err
 			}

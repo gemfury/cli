@@ -33,6 +33,7 @@ func NewCmdVersions() *cobra.Command {
 
 func listPackages(cmd *cobra.Command, args []string) error {
 	cc := cmd.Context()
+	term := ctxTerminal(cc)
 	c, err := newAPIClient(cc)
 	if err != nil {
 		return err
@@ -53,13 +54,13 @@ func listPackages(cmd *cobra.Command, args []string) error {
 
 	// Handle no packages
 	if len(packages) == 0 {
-		fmt.Println("No packages found in this account")
+		term.Println("No packages found in this account")
 		return nil
 	}
 
 	// Print results
-	fmt.Printf("\n*** GEMFURY PACKAGES ***\n\n")
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	term.Printf("\n*** GEMFURY PACKAGES ***\n\n")
+	w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "name\tkind\tversion\tprivacy\n")
 
 	for _, p := range packages {
@@ -76,6 +77,7 @@ func listVersions(cmd *cobra.Command, args []string) error {
 	}
 
 	cc := cmd.Context()
+	term := ctxTerminal(cc)
 	c, err := newAPIClient(cc)
 	if err != nil {
 		return err
@@ -95,8 +97,8 @@ func listVersions(cmd *cobra.Command, args []string) error {
 	})
 
 	// Print results
-	fmt.Printf("\n*** %s versions ***\n\n", args[0])
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	term.Printf("\n*** %s versions ***\n\n", args[0])
+	w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "version\tuploaded_by\tuploaded_at\n")
 
 	for _, v := range versions {
@@ -113,6 +115,7 @@ func iterateAllPages(cc context.Context, fn func(req *api.PaginationRequest) (*a
 }
 
 func iterateAll(cc context.Context, showSpinner bool, fn func(req *api.PaginationRequest) (*api.PaginationResponse, error)) error {
+	term := ctxTerminal(cc)
 	pageReq := api.PaginationRequest{
 		Limit: 100,
 	}
@@ -121,7 +124,7 @@ func iterateAll(cc context.Context, showSpinner bool, fn func(req *api.Paginatio
 	defer func() {
 		if spin != nil {
 			spin.Stop()
-			fmt.Printf("\r")
+			term.Printf("\r")
 		}
 	}()
 

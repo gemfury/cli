@@ -36,6 +36,7 @@ func NewCmdPush() *cobra.Command {
 			}
 
 			cc := cmd.Context()
+			term := ctxTerminal(cc)
 			c, err := newAPIClient(cc)
 			if err != nil {
 				return err
@@ -57,7 +58,7 @@ func NewCmdPush() *cobra.Command {
 					// Prepare progress bar
 					var reader io.Reader = file
 					if noProgress {
-						fmt.Print(prefix)
+						term.Printf(prefix)
 						prefix = ""
 					} else {
 						stat, _ := file.Stat()
@@ -77,17 +78,17 @@ func NewCmdPush() *cobra.Command {
 				}
 
 				if err == nil {
-					fmt.Printf("%s- done\n", prefix)
+					term.Printf("%s- done\n", prefix)
 				} else if os.IsNotExist(err) {
-					fmt.Printf("%s- file not found\n", prefix)
+					term.Printf("%s- file not found\n", prefix)
 				} else if errors.Is(err, api.ErrUnauthorized) {
-					fmt.Printf("%s- unauthorized\n", prefix)
+					term.Printf("%s- unauthorized\n", prefix)
 				} else if errors.Is(err, api.ErrForbidden) {
-					fmt.Printf("%s- no permission\n", prefix)
+					term.Printf("%s- no permission\n", prefix)
 				} else if ue, ok := err.(api.UserError); ok {
-					fmt.Printf("%s- %s\n", prefix, ue.ShortError())
+					term.Printf("%s- %s\n", prefix, ue.ShortError())
 				} else {
-					fmt.Printf("%s- error %q\n", prefix, err.Error())
+					term.Printf("%s- error %q\n", prefix, err.Error())
 				}
 			}
 

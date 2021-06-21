@@ -29,6 +29,7 @@ func NewCmdYank() *cobra.Command {
 			}
 
 			cc := cmd.Context()
+			term := ctxTerminal(cc)
 			c, err := newAPIClient(cc)
 			if err != nil {
 				return err
@@ -36,7 +37,7 @@ func NewCmdYank() *cobra.Command {
 
 			err = c.Yank(cc, pkg, ver)
 			if err == nil {
-				fmt.Printf("Removed package %q version %q\n", pkg, ver)
+				term.Printf("Removed package %q version %q\n", pkg, ver)
 			}
 
 			return err

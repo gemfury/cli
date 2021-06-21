@@ -3,6 +3,7 @@ package cli
 import (
 	"github.com/cheggaaa/pb/v3"
 	"github.com/gemfury/cli/api"
+	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 
@@ -94,6 +95,8 @@ func backupEverything(cmd *cobra.Command, args []string, kindFlag string) error 
 }
 
 func backupVersion(cc context.Context, client *api.Client, v *api.Version, destDir string) error {
+	term := ctxTerminal(cc)
+
 	slash := string(filepath.Separator)
 	pkgName := strings.ReplaceAll(v.Package.Name, slash, "_")
 	fileName := strings.ReplaceAll(v.ID+"_"+v.Filename, slash, "_")
@@ -117,7 +120,7 @@ func backupVersion(cc context.Context, client *api.Client, v *api.Version, destD
 	}
 
 	// Check if file exists, and validate checksum
-	if err := backupCheckPath(v, path, statusFmt); errors.Is(err, backupSkip) {
+	if err := backupCheckPath(term, v, path, statusFmt); errors.Is(err, backupSkip) {
 		return nil // Checksum match => skip download
 	} else if err != nil {
 		return err
@@ -149,14 +152,14 @@ func backupVersion(cc context.Context, client *api.Client, v *api.Version, destD
 
 	// Status output
 	if err == nil {
-		fmt.Printf(statusFmt+"\n", "💾")
+		term.Printf(statusFmt+"\n", "💾")
 	}
 
 	return err
 }
 
 // Validate checksum for file
-func backupCheckPath(v *api.Version, path, statusFmt string) error {
+func backupCheckPath(term terminal.Terminal, v *api.Version, path, statusFmt string) error {
 	// Check if file exists, and validate checksum if it does
 	if s, err := os.Stat(path); os.IsNotExist(err) {
 		return nil
@@ -167,7 +170,7 @@ func backupCheckPath(v *api.Version, path, statusFmt string) error {
 	}
 
 	if v == nil || v.Digests.SHA512 == "" {
-		fmt.Printf(statusFmt+" (WARNING: No checksum provided by API)\n", "❓")
+		term.Printf(statusFmt+" (WARNING: No checksum provided by API)\n", "❓")
 		return backupSkip // API should always have digests (theoretically)
 	}
 
@@ -184,7 +187,7 @@ func backupCheckPath(v *api.Version, path, statusFmt string) error {
 
 	sum := fmt.Sprintf("%x", hash.Sum(nil))
 	if exp := v.Digests.SHA512; exp != sum {
-		fmt.Printf(statusFmt+" (CHECKSUM MISMATCH)\n", "❌")
+		term.Printf(statusFmt+" (CHECKSUM MISMATCH)\n", "❌")
 		prompt := promptui.Prompt{
 			Label:   "Do you want to delete and redownload? [y/N]",
 			Default: "N",
@@ -202,6 +205,6 @@ func backupCheckPath(v *api.Version, path, statusFmt string) error {
 		return fmt.Errorf("Checksum failed")
 	}
 
-	fmt.Printf(statusFmt+"\n", "✅")
+	term.Printf(statusFmt+"\n", "✅")
 	return backupSkip
 }

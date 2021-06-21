@@ -3,8 +3,6 @@ package cli
 import (
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
-
-	"fmt"
 )
 
 // Machines for Gemfury in .netrc file
@@ -18,10 +16,12 @@ func NewCmdLogout() *cobra.Command {
 		Use:   "logout",
 		Short: "Clear CLI session credentials",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			term := ctxTerminal(cmd.Context())
+
 			if token, err := netrcAuth(); err != nil {
 				return err
 			} else if token == "" {
-				fmt.Println("You are logged out")
+				term.Println("You are logged out")
 				return nil
 			}
 
@@ -52,7 +52,7 @@ func NewCmdLogout() *cobra.Command {
 				return err
 			}
 
-			fmt.Println("You have been logged out")
+			term.Println("You have been logged out")
 			return nil
 		},
 	}
@@ -66,6 +66,7 @@ func NewCmdLogin() *cobra.Command {
 		Use:   "login",
 		Short: "Authenticate into Gemfury account",
 		RunE: func(cmd *cobra.Command, args []string) error {
+
 			user, err := ensureAuthenticated(cmd)
 			if err != nil {
 				return err
@@ -78,7 +79,8 @@ func NewCmdLogin() *cobra.Command {
 				}
 			}
 
-			fmt.Printf("You are logged in as %q\n", user.Name)
+			term := ctxTerminal(cmd.Context())
+			term.Printf("You are logged in as %q\n", user.Name)
 			return nil
 		},
 	}

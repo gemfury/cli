@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -17,8 +18,17 @@ func NewRootAndContext() (*cobra.Command, context.Context) {
 		Long:  `See https://gemfury.com/help/gemfury-cli`,
 	}
 
+	// Configure input/output/error streams
+	term := terminal.New()
+	cmdCtx = contextWithTerminal(cmdCtx, term)
+
 	// Ensure authentication for all commands except "logout"
-	rootCmd.PersistentPreRunE = preRunCheckAuthentication
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		cmd.SetIn(term.IOIn())
+		cmd.SetOut(term.IOOut())
+		cmd.SetErr(term.IOErr())
+		return preRunCheckAuthentication(cmd, args)
+	}
 
 	// Global flags (account, verbose, etc)
 	rootFlagSet := rootCmd.PersistentFlags()
