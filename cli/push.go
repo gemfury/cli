@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"github.com/cheggaaa/pb/v3"
 	"github.com/gemfury/cli/api"
 	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
@@ -11,16 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-)
-
-const (
-	// Progress bar template to match legacy Gemfury CLI
-	pbTemplate pb.ProgressBarTemplate = `{{string . "prefix"}}{{ bar . "[" "=" (cycle . "⠁" "⠂" "⠄" "⠂") " " "]" }} {{percent . }}`
-)
-
-var (
-	// "Factory" for Gemfury-style progress bars
-	pbFactory = pb.ProgressBarTemplate(pbTemplate)
 )
 
 // NewCmdPush generates the Cobra command for "push"
@@ -62,9 +51,7 @@ func NewCmdPush() *cobra.Command {
 						prefix = ""
 					} else {
 						stat, _ := file.Stat()
-						bar := pbFactory.Start64(stat.Size())
-						bar = bar.Set("prefix", prefix)
-						bar = bar.Set(pb.CleanOnFinish, true)
+						bar := term.StartProgress(stat.Size(), prefix)
 						reader = bar.NewProxyReader(file)
 						defer bar.Finish()
 					}

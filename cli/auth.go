@@ -25,13 +25,13 @@ func ensureAuthenticated(cmd *cobra.Command) (*api.AccountResponse, error) {
 	term.Println("Please enter your Gemfury credentials.")
 
 	ePrompt := promptui.Prompt{Label: "Email: "}
-	eResult, err := ePrompt.Run()
+	eResult, err := term.RunPrompt(&ePrompt)
 	if err != nil {
 		return nil, err
 	}
 
 	pPrompt := promptui.Prompt{Label: "Password: ", Mask: '*'}
-	pResult, err := pPrompt.Run()
+	pResult, err := term.RunPrompt(&pPrompt)
 	if err != nil {
 		return nil, err
 	}

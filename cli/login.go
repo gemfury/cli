@@ -30,7 +30,7 @@ func NewCmdLogout() *cobra.Command {
 				Default: "N",
 			}
 
-			result, err := prompt.Run()
+			result, err := term.RunPrompt(&prompt)
 			if err != nil {
 				return err
 			}

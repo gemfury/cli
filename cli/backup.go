@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"github.com/cheggaaa/pb/v3"
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/manifoldco/promptui"
@@ -141,9 +140,7 @@ func backupVersion(cc context.Context, client *api.Client, v *api.Version, destD
 	defer body.Close()
 
 	// Wrap with status bar
-	bar := pbFactory.Start64(size)
-	bar = bar.Set("prefix", fmt.Sprintf(statusFmt+" ", "⌛"))
-	bar = bar.Set(pb.CleanOnFinish, true)
+	bar := term.StartProgress(size, fmt.Sprintf(statusFmt+" ", "⌛"))
 	reader := bar.NewProxyReader(body)
 
 	// Download and write to disk
@@ -193,7 +190,7 @@ func backupCheckPath(term terminal.Terminal, v *api.Version, path, statusFmt str
 			Default: "N",
 		}
 
-		result, err := prompt.Run()
+		result, err := term.RunPrompt(&prompt)
 		if err != nil {
 			return err
 		} else if result == "Y" || result == "y" {
