@@ -19,8 +19,8 @@ func NewRootAndContext() (*cobra.Command, context.Context) {
 	}
 
 	// Configure input/output/error streams
-	term := terminal.New()
-	cmdCtx = contextWithTerminal(cmdCtx, term)
+	term, auth := terminal.New(), terminal.Netrc()
+	cmdCtx = contextWithTerminal(cmdCtx, term, auth)
 
 	// Ensure authentication for all commands except "logout"
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {

@@ -1,11 +1,9 @@
-package cli
+package terminal
 
 import (
 	"github.com/bgentry/go-netrc/netrc"
-	"github.com/gemfury/cli/api"
 
 	"bytes"
-	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -13,53 +11,56 @@ import (
 	"runtime"
 )
 
-func newAPIClient(cc context.Context) (c *api.Client, err error) {
-	flags := ctxGlobalFlags(cc)
+// Machines for Gemfury in .netrc file
+var (
+	netrcMachines = []string{"api.fury.io", "git.fury.io"}
+)
 
-	// Token comes from CLI flags or .netrc
-	token := flags.AuthToken
-	if token == "" {
-		token, err = netrcAuth()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	c = api.NewClient(token, flags.Account)
-	return c, nil
+type Auther interface {
+	Auth() (string, string, error)
+	Append(string, string) error
+	Wipe() error
 }
 
-func netrcAuth() (string, error) {
+func Netrc() Auther {
+	return nrc{machines: netrcMachines}
+}
+
+type nrc struct {
+	machines []string
+}
+
+func (n nrc) Auth() (string, string, error) {
 	path, err := netrcPath()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// Load up the netrc file
 	net, err := netrc.ParseFile(path)
 	if err != nil {
-		return "", fmt.Errorf("Error reading .netrc file %q: %w", path, err)
+		return "", "", fmt.Errorf("Error reading .netrc file %q: %w", path, err)
 	}
 
-	machine := net.FindMachine("api.fury.io")
+	machine := net.FindMachine(n.machines[0])
 	if machine == nil {
-		return "", nil
+		return "", "", nil
 	}
 
-	return machine.Password, nil
+	return machine.Login, machine.Password, nil
 }
 
-func netrcAppend(machines []string, user, pass string) error {
+func (n nrc) Append(user, pass string) error {
 	return netrcUpdate(func(net *netrc.Netrc) {
-		for _, m := range machines {
+		for _, m := range n.machines {
 			net.NewMachine(m, user, pass, "")
 		}
 	})
 }
 
-func netrcWipe(machines []string) error {
+func (n nrc) Wipe() error {
 	return netrcUpdate(func(net *netrc.Netrc) {
-		for _, m := range machines {
+		for _, m := range n.machines {
 			net.RemoveMachine(m)
 		}
 	})

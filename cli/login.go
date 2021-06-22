@@ -16,9 +16,11 @@ func NewCmdLogout() *cobra.Command {
 		Use:   "logout",
 		Short: "Clear CLI session credentials",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			term := ctxTerminal(cmd.Context())
+			cc := cmd.Context()
+			term := ctxTerminal(cc)
+			auth := ctxAuther(cc)
 
-			if token, err := netrcAuth(); err != nil {
+			if _, token, err := auth.Auth(); err != nil {
 				return err
 			} else if token == "" {
 				term.Println("You are logged out")
@@ -39,16 +41,16 @@ func NewCmdLogout() *cobra.Command {
 				return nil
 			}
 
-			c, err := newAPIClient(cmd.Context())
+			c, err := newAPIClient(cc)
 			if err != nil {
 				return err
 			}
 
-			if err := c.Logout(cmd.Context()); err != nil {
+			if err := c.Logout(cc); err != nil {
 				return err
 			}
 
-			if err := netrcWipe(netrcMachines); err != nil {
+			if err := ctxAuther(cc).Wipe(); err != nil {
 				return err
 			}
 

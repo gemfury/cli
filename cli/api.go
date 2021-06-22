@@ -4,7 +4,26 @@ import (
 	"github.com/gemfury/cli/api"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
+
+	"context"
 )
+
+// Initialize new Gemfury API client with authentication
+func newAPIClient(cc context.Context) (c *api.Client, err error) {
+	flags := ctxGlobalFlags(cc)
+
+	// Token comes from CLI flags or .netrc
+	token := flags.AuthToken
+	if token == "" {
+		_, token, err = ctxAuther(cc).Auth()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	c = api.NewClient(token, flags.Account)
+	return c, nil
+}
 
 // Hook for root command to ensure user is authenticated or prompt to login
 func preRunCheckAuthentication(cmd *cobra.Command, args []string) error {
@@ -17,11 +36,13 @@ func preRunCheckAuthentication(cmd *cobra.Command, args []string) error {
 }
 
 func ensureAuthenticated(cmd *cobra.Command) (*api.AccountResponse, error) {
-	if token, err := netrcAuth(); token != "" || err != nil {
+	cc := cmd.Context()
+
+	if _, token, err := ctxAuther(cc).Auth(); token != "" || err != nil {
 		return nil, err
 	}
 
-	term := ctxTerminal(cmd.Context())
+	term := ctxTerminal(cc)
 	term.Println("Please enter your Gemfury credentials.")
 
 	ePrompt := promptui.Prompt{Label: "Email: "}
@@ -36,13 +57,13 @@ func ensureAuthenticated(cmd *cobra.Command) (*api.AccountResponse, error) {
 		return nil, err
 	}
 
-	c, err := newAPIClient(cmd.Context())
+	c, err := newAPIClient(cc)
 	if err != nil {
 		return nil, err
 	}
 
 	req := api.LoginRequest{Email: eResult, Password: pResult}
-	resp, err := c.Login(cmd.Context(), &req)
+	resp, err := c.Login(cc, &req)
 	if err == api.ErrUnauthorized {
 		cmd.SilenceErrors = true
 		cmd.SilenceUsage = true
@@ -52,7 +73,7 @@ func ensureAuthenticated(cmd *cobra.Command) (*api.AccountResponse, error) {
 	}
 
 	// Save credentials in .netrc
-	err = netrcAppend(netrcMachines, resp.User.Email, resp.Token)
+	err = ctxAuther(cc).Append(resp.User.Email, resp.Token)
 	if err != nil {
 		return nil, err
 	}
