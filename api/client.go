@@ -21,8 +21,9 @@ var (
 	// Default "User-Agent" header for Gemfury API requests
 	hdrUserAgent = "Gemfury Go-CLI %s"
 
-	// Default API endpoint
-	defaultEndpoint = "https://api.fury.io"
+	// Default API endpoints
+	defaultPushEndpoint = "https://push.fury.io"
+	defaultEndpoint     = "https://api.fury.io"
 
 	// DefaultConduit is a wrapper for http.DefaultClient
 	DefaultConduit = &conduitStandard{
@@ -33,26 +34,30 @@ var (
 
 // Client is the main entrypoint for interacting with Gemfury API
 type Client struct {
-	conduit conduit
-	Account string
-	Token   string
+	conduit      conduit
+	PushEndpoint string
+	Endpoint     string
+	Account      string
+	Token        string
 }
 
 // NewClient creates a new client using the DefaultConduit
 func NewClient(token, account string) *Client {
 	return &Client{
-		conduit: DefaultConduit,
-		Account: account,
-		Token:   token,
+		conduit:      DefaultConduit,
+		PushEndpoint: defaultPushEndpoint,
+		Endpoint:     defaultEndpoint,
+		Account:      account,
+		Token:        token,
 	}
 }
 
 func (c *Client) newRequest(cc context.Context, method, rawPath string, impersonate bool) *request {
-	return c.makeRequest(cc, method, defaultEndpoint, rawPath, impersonate)
+	return c.makeRequest(cc, method, c.Endpoint, rawPath, impersonate)
 }
 
 func (c *Client) newPushRequest(cc context.Context, method, rawPath string, impersonate bool) *request {
-	return c.makeRequest(cc, method, "https://push.fury.io", rawPath, impersonate)
+	return c.makeRequest(cc, method, c.PushEndpoint, rawPath, impersonate)
 }
 
 func (c *Client) makeRequest(cc context.Context, method, base, rawPath string, impersonate bool) *request {

@@ -1,36 +1,33 @@
 package cli
 
 import (
-	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"context"
 )
 
-// NewRootAndContext creates the root Cobra CLI command and context
-func NewRootAndContext() (*cobra.Command, context.Context) {
-	flags, cmdCtx := contextWithGlobalFlags(context.Background())
-
+// NewRootCommand creates the root Cobra CLI command and context
+func NewRootCommand(cc context.Context) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "fury",
 		Short: "Command line interface to Gemfury API",
 		Long:  `See https://gemfury.com/help/gemfury-cli`,
 	}
 
-	// Configure input/output/error streams
-	term, auth := terminal.New(), terminal.Netrc()
-	cmdCtx = contextWithTerminal(cmdCtx, term, auth)
+	// Connect I/O
+	term := ctxTerminal(cc)
+	rootCmd.SetIn(term.IOIn())
+	rootCmd.SetOut(term.IOOut())
+	rootCmd.SetErr(term.IOErr())
 
 	// Ensure authentication for all commands except "logout"
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		cmd.SetIn(term.IOIn())
-		cmd.SetOut(term.IOOut())
-		cmd.SetErr(term.IOErr())
 		return preRunCheckAuthentication(cmd, args)
 	}
 
 	// Global flags (account, verbose, etc)
+	flags := ContextGlobalFlags(cc)
 	rootFlagSet := rootCmd.PersistentFlags()
 	rootFlagSet.StringVar(&flags.AuthToken, "api-token", "", "Inline authentication token")
 	rootFlagSet.StringVar(&flags.Account, "account", "", "Current account username")
@@ -52,7 +49,7 @@ func NewRootAndContext() (*cobra.Command, context.Context) {
 		NewCmdBeta(),
 	)
 
-	return rootCmd, cmdCtx
+	return rootCmd
 }
 
 func globalFlagNormalization(f *pflag.FlagSet, name string) pflag.NormalizedName {

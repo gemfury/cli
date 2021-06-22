@@ -16,7 +16,8 @@ var (
 )
 
 func main() {
-	rootCmd, cmdCtx := cli.NewRootAndContext()
+	cc := cli.CommandContext()
+	rootCmd := cli.NewRootCommand(cc)
 
 	// Populate version strings everywhere
 	api.DefaultConduit.Version = Version
@@ -28,7 +29,7 @@ func main() {
 	}
 
 	// Process command and deliver results
-	if err := rootCmd.ExecuteContext(cmdCtx); err != nil {
+	if err := rootCmd.ExecuteContext(cc); err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
 		os.Exit(1)
 	}

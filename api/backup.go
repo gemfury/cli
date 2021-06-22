@@ -29,7 +29,7 @@ func (c *Client) DumpVersions(cc context.Context, body *PaginationRequest, kindF
 }
 
 func (c *Client) DownloadVersion(cc context.Context, v *Version) (io.ReadCloser, int64, error) {
-	if !strings.HasPrefix(v.DownloadURL, defaultEndpoint) {
+	if !strings.HasPrefix(v.DownloadURL, c.Endpoint) {
 		return nil, 0, fmt.Errorf("Download URL not compatible with API client")
 	}
 

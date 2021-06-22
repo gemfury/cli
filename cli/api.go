@@ -10,7 +10,7 @@ import (
 
 // Initialize new Gemfury API client with authentication
 func newAPIClient(cc context.Context) (c *api.Client, err error) {
-	flags := ctxGlobalFlags(cc)
+	flags := ContextGlobalFlags(cc)
 
 	// Token comes from CLI flags or .netrc
 	token := flags.AuthToken
@@ -21,7 +21,14 @@ func newAPIClient(cc context.Context) (c *api.Client, err error) {
 		}
 	}
 
+	// Initialize client with authentication
 	c = api.NewClient(token, flags.Account)
+
+	// Endpoint configuration for testing
+	if e := flags.Endpoint; e != "" {
+		c.Endpoint = e
+	}
+
 	return c, nil
 }
 
