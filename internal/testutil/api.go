@@ -3,6 +3,7 @@ package testutil
 import (
 	"net/http"
 	"net/http/httptest"
+	"testing"
 )
 
 const loginResponse = `{
@@ -14,10 +15,12 @@ const loginResponse = `{
 			}
 		}`
 
-func APIServer(method, path, resp string, code int) *httptest.Server {
+func APIServer(t *testing.T, method, path, resp string, code int) *httptest.Server {
 	h := http.NewServeMux()
 
 	h.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		t.Logf("API Request: %s %s", r.Method, r.URL.String())
+
 		if r.Method != method {
 			w.WriteHeader(http.StatusNotImplemented)
 		}

@@ -16,7 +16,7 @@ func TestWhoamiCommandSuccess(t *testing.T) {
 	term := terminal.NewForTest()
 
 	// Fire up test server
-	server := testutil.APIServer("GET", "/users/me", whoamiResponse, 200)
+	server := testutil.APIServer(t, "GET", "/users/me", whoamiResponse, 200)
 	defer server.Close()
 
 	cc := cli.TestContext(term, auth)
@@ -40,13 +40,13 @@ func TestWhoamiCommandSuccess(t *testing.T) {
 }
 
 func TestWhoamiCommandUnauthorized(t *testing.T) {
-	server := testutil.APIServer("GET", "/users/me", whoamiResponse, 200)
+	server := testutil.APIServer(t, "GET", "/users/me", whoamiResponse, 200)
 	testCommandLoginPreCheck(t, []string{"whoami"}, server)
 	server.Close()
 }
 
 func TestWhoamiCommandForbidden(t *testing.T) {
-	server := testutil.APIServer("GET", "/users/me", "{}", 403)
+	server := testutil.APIServer(t, "GET", "/users/me", "{}", 403)
 	testCommandForbiddenResponse(t, []string{"whoami"}, server)
 	server.Close()
 }

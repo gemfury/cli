@@ -7,9 +7,15 @@ import (
 	"github.com/gemfury/cli/pkg/terminal"
 
 	"context"
+	"errors"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
+)
+
+var (
+	usageRegexp = regexp.MustCompilePOSIX("^Usage:$")
 )
 
 func TestRootCommand(t *testing.T) {
@@ -17,7 +23,7 @@ func TestRootCommand(t *testing.T) {
 	term := terminal.NewForTest()
 
 	// Fire up test server (error on everything)
-	server := testutil.APIServer("", "/", "", 501)
+	server := testutil.APIServer(t, "", "/", "", 501)
 	defer server.Close()
 
 	cc := cli.TestContext(term, auth)
@@ -74,7 +80,7 @@ func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.
 	flags.Endpoint = server.URL
 
 	err := runCommand(cc, args)
-	if err != api.ErrForbidden {
+	if !errors.Is(err, api.ErrForbidden) {
 		t.Fatalf("Command error: %s", err)
 	}
 
@@ -83,8 +89,7 @@ func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.
 		t.Errorf("Error should be %q, got %q", exp, errStr)
 	}
 
-	outStr := string(term.OutBytes())
-	if !strings.HasPrefix(outStr, "Usage:\n") {
-		t.Errorf("Output isn't showing usage: \n%s", outStr)
+	if ob := term.OutBytes(); !usageRegexp.Match(ob) {
+		t.Errorf("Output isn't showing usage: \n%s", ob)
 	}
 }
