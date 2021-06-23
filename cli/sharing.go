@@ -3,6 +3,7 @@ package cli
 import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
+	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
 
 	"fmt"
@@ -116,10 +117,12 @@ func NewCmdSharingRemove() *cobra.Command {
 				return err
 			}
 
+			var multiErr *multierror.Error
 			for _, name := range args {
 				err := c.RemoveCollaborator(cc, name)
 
 				if err != nil {
+					multiErr = multierror.Append(multiErr, err)
 					log.Printf("Problem removing %q: %s\n", name, err)
 					continue
 				}
@@ -127,7 +130,7 @@ func NewCmdSharingRemove() *cobra.Command {
 				term.Printf("Removed %q as a collaborator\n", name)
 			}
 
-			return nil
+			return multiErr.Unwrap()
 		},
 	}
 
