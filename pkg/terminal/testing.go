@@ -7,6 +7,11 @@ import (
 	"io"
 )
 
+type TestTerm interface {
+	ErrBytes() []byte
+	Terminal
+}
+
 func NewForTest() *testTerm {
 	streams := []*bytes.Buffer{{}, {}, {}}
 	return &testTerm{

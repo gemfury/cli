@@ -1,8 +1,10 @@
 package cli
 
 import (
-	"fmt"
+	"github.com/gemfury/cli/internal/ctx"
 	"github.com/spf13/cobra"
+
+	"fmt"
 )
 
 // NewCmdYank generates the Cobra command for "yank"
@@ -29,7 +31,7 @@ func NewCmdYank() *cobra.Command {
 			}
 
 			cc := cmd.Context()
-			term := ctxTerminal(cc)
+			term := ctx.Terminal(cc)
 			c, err := newAPIClient(cc)
 			if err != nil {
 				return err

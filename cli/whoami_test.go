@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"github.com/gemfury/cli/cli"
+	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/internal/testutil"
 	"github.com/gemfury/cli/pkg/terminal"
 	"testing"
@@ -20,7 +21,7 @@ func TestWhoamiCommandSuccess(t *testing.T) {
 	defer server.Close()
 
 	cc := cli.TestContext(term, auth)
-	flags := cli.ContextGlobalFlags(cc)
+	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
 	err := runCommand(cc, []string{"whoami"})

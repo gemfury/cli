@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/gemfury/cli/internal/ctx"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 )
@@ -17,8 +18,8 @@ func NewCmdLogout() *cobra.Command {
 		Short: "Clear CLI session credentials",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cc := cmd.Context()
-			term := ctxTerminal(cc)
-			auth := ctxAuther(cc)
+			term := ctx.Terminal(cc)
+			auth := ctx.Auther(cc)
 
 			if _, token, err := auth.Auth(); err != nil {
 				return err
@@ -50,7 +51,7 @@ func NewCmdLogout() *cobra.Command {
 				return err
 			}
 
-			if err := ctxAuther(cc).Wipe(); err != nil {
+			if err := ctx.Auther(cc).Wipe(); err != nil {
 				return err
 			}
 
@@ -81,7 +82,7 @@ func NewCmdLogin() *cobra.Command {
 				}
 			}
 
-			term := ctxTerminal(cmd.Context())
+			term := ctx.Terminal(cmd.Context())
 			term.Printf("You are logged in as %q\n", user.Name)
 			return nil
 		},

@@ -3,6 +3,7 @@ package cli
 import (
 	"github.com/briandowns/spinner"
 	"github.com/gemfury/cli/api"
+	"github.com/gemfury/cli/internal/ctx"
 	"github.com/spf13/cobra"
 
 	"context"
@@ -33,7 +34,7 @@ func NewCmdVersions() *cobra.Command {
 
 func listPackages(cmd *cobra.Command, args []string) error {
 	cc := cmd.Context()
-	term := ctxTerminal(cc)
+	term := ctx.Terminal(cc)
 	c, err := newAPIClient(cc)
 	if err != nil {
 		return err
@@ -77,7 +78,7 @@ func listVersions(cmd *cobra.Command, args []string) error {
 	}
 
 	cc := cmd.Context()
-	term := ctxTerminal(cc)
+	term := ctx.Terminal(cc)
 	c, err := newAPIClient(cc)
 	if err != nil {
 		return err
@@ -115,7 +116,7 @@ func iterateAllPages(cc context.Context, fn func(req *api.PaginationRequest) (*a
 }
 
 func iterateAll(cc context.Context, showSpinner bool, fn func(req *api.PaginationRequest) (*api.PaginationResponse, error)) error {
-	term := ctxTerminal(cc)
+	term := ctx.Terminal(cc)
 	pageReq := api.PaginationRequest{
 		Limit: 100,
 	}

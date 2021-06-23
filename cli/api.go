@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/gemfury/cli/api"
+	"github.com/gemfury/cli/internal/ctx"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 
@@ -10,12 +11,12 @@ import (
 
 // Initialize new Gemfury API client with authentication
 func newAPIClient(cc context.Context) (c *api.Client, err error) {
-	flags := ContextGlobalFlags(cc)
+	flags := ctx.GlobalFlags(cc)
 
 	// Token comes from CLI flags or .netrc
 	token := flags.AuthToken
 	if token == "" {
-		_, token, err = ctxAuther(cc).Auth()
+		_, token, err = ctx.Auther(cc).Auth()
 		if err != nil {
 			return nil, err
 		}
@@ -45,11 +46,11 @@ func preRunCheckAuthentication(cmd *cobra.Command, args []string) error {
 func ensureAuthenticated(cmd *cobra.Command) (*api.AccountResponse, error) {
 	cc := cmd.Context()
 
-	if _, token, err := ctxAuther(cc).Auth(); token != "" || err != nil {
+	if _, token, err := ctx.Auther(cc).Auth(); token != "" || err != nil {
 		return nil, err
 	}
 
-	term := ctxTerminal(cc)
+	term := ctx.Terminal(cc)
 	term.Println("Please enter your Gemfury credentials.")
 
 	ePrompt := promptui.Prompt{Label: "Email: "}
@@ -80,7 +81,7 @@ func ensureAuthenticated(cmd *cobra.Command) (*api.AccountResponse, error) {
 	}
 
 	// Save credentials in .netrc
-	err = ctxAuther(cc).Append(resp.User.Email, resp.Token)
+	err = ctx.Auther(cc).Append(resp.User.Email, resp.Token)
 	if err != nil {
 		return nil, err
 	}

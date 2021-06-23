@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/gemfury/cli/api"
+	"github.com/gemfury/cli/internal/ctx"
 	"github.com/spf13/cobra"
 
 	"fmt"
@@ -25,7 +26,7 @@ func NewCmdSharingRoot() *cobra.Command {
 
 func listMembers(cmd *cobra.Command, args []string) error {
 	cc := cmd.Context()
-	term := ctxTerminal(cc)
+	term := ctx.Terminal(cc)
 	c, err := newAPIClient(cc)
 	if err != nil {
 		return err
@@ -74,7 +75,7 @@ func NewCmdSharingAdd() *cobra.Command {
 			}
 
 			cc := cmd.Context()
-			term := ctxTerminal(cc)
+			term := ctx.Terminal(cc)
 			c, err := newAPIClient(cc)
 			if err != nil {
 				return err
@@ -109,7 +110,7 @@ func NewCmdSharingRemove() *cobra.Command {
 			}
 
 			cc := cmd.Context()
-			term := ctxTerminal(cc)
+			term := ctx.Terminal(cc)
 			c, err := newAPIClient(cc)
 			if err != nil {
 				return err
@@ -140,7 +141,7 @@ func NewCmdAccounts() *cobra.Command {
 		Short: "Listing of your collaborations",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cc := cmd.Context()
-			term := ctxTerminal(cc)
+			term := ctx.Terminal(cc)
 			c, err := newAPIClient(cc)
 			if err != nil {
 				return err

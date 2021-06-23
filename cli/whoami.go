@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/gemfury/cli/api"
+	"github.com/gemfury/cli/internal/ctx"
 	"github.com/spf13/cobra"
 
 	"context"
@@ -18,7 +19,7 @@ func NewCmdWhoAmI() *cobra.Command {
 				return err
 			}
 
-			term := ctxTerminal(cmd.Context())
+			term := ctx.Terminal(cmd.Context())
 			term.Printf("You are logged in as %q\n", resp.Name)
 			return nil
 		},

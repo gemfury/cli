@@ -3,11 +3,13 @@ package cli_test
 import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/cli"
+	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/internal/testutil"
 	"github.com/gemfury/cli/pkg/terminal"
 
 	"context"
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"regexp"
 	"strings"
@@ -27,10 +29,12 @@ func TestRootCommand(t *testing.T) {
 	defer server.Close()
 
 	cc := cli.TestContext(term, auth)
-	flags := cli.ContextGlobalFlags(cc)
+	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
-	runCommand(cc, []string{""})
+	if err := runCommandNoErr(cc, []string{""}); err != nil {
+		t.Fatal(err)
+	}
 
 	outStr := string(term.OutBytes())
 	if exp := "See https://gemfury.com/help/gemfury-cli\n"; !strings.HasPrefix(outStr, exp) {
@@ -44,12 +48,25 @@ func runCommand(cc context.Context, args []string) error {
 	return cmd.ExecuteContext(cc)
 }
 
+func runCommandNoErr(cc context.Context, args []string) error {
+	if err := runCommand(cc, args); err != nil {
+		return fmt.Errorf("Command error: %w", err)
+	}
+
+	term := ctx.TestTerm(cc)
+	if errStr := string(term.ErrBytes()); errStr != "" {
+		return fmt.Errorf("Error output: %q", errStr)
+	}
+
+	return nil
+}
+
 func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Server) {
 	auth := terminal.TestAuther("", "", nil)
 	term := terminal.NewForTest()
 
 	cc := cli.TestContext(term, auth)
-	flags := cli.ContextGlobalFlags(cc)
+	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
 	// Prepare for login prompt
@@ -76,7 +93,7 @@ func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.
 	term := terminal.NewForTest()
 
 	cc := cli.TestContext(term, auth)
-	flags := cli.ContextGlobalFlags(cc)
+	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
 	err := runCommand(cc, args)

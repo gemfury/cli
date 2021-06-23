@@ -1,8 +1,10 @@
 package cli
 
 import (
-	"fmt"
+	"github.com/gemfury/cli/internal/ctx"
 	"github.com/spf13/cobra"
+
+	"fmt"
 )
 
 // Root for Git subcommands
@@ -25,7 +27,7 @@ func NewCmdGitReset() *cobra.Command {
 		Use:   "reset REPO",
 		Short: "Remove Git repository",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			term := ctxTerminal(cmd.Context())
+			term := ctx.Terminal(cmd.Context())
 
 			if len(args) != 1 {
 				return fmt.Errorf("Please specify a repository")
@@ -56,7 +58,7 @@ func NewCmdGitRename() *cobra.Command {
 		Use:   "rename REPO NEWNAME",
 		Short: "Rename a Git repository",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			term := ctxTerminal(cmd.Context())
+			term := ctx.Terminal(cmd.Context())
 
 			if len(args) != 2 {
 				return fmt.Errorf("Please specify a repository")
@@ -87,7 +89,7 @@ func NewCmdGitRebuild() *cobra.Command {
 		Use:   "rebuild REPO",
 		Short: "Run the builder on the repo",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			term := ctxTerminal(cmd.Context())
+			term := ctx.Terminal(cmd.Context())
 
 			if len(args) != 1 {
 				return fmt.Errorf("Please specify a repository")

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/gemfury/cli/api"
+	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
@@ -94,7 +95,7 @@ func backupEverything(cmd *cobra.Command, args []string, kindFlag string) error 
 }
 
 func backupVersion(cc context.Context, client *api.Client, v *api.Version, destDir string) error {
-	term := ctxTerminal(cc)
+	term := ctx.Terminal(cc)
 
 	slash := string(filepath.Separator)
 	pkgName := strings.ReplaceAll(v.Package.Name, slash, "_")

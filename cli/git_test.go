@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"github.com/gemfury/cli/cli"
+	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/internal/testutil"
 	"github.com/gemfury/cli/pkg/terminal"
 	"strings"
@@ -24,17 +25,12 @@ func TestGitRebuildCommandSuccess(t *testing.T) {
 	defer server.Close()
 
 	cc := cli.TestContext(term, auth)
-	flags := cli.ContextGlobalFlags(cc)
+	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
-	err := runCommand(cc, []string{"git", "rebuild", "repo-name"})
+	err := runCommandNoErr(cc, []string{"git", "rebuild", "repo-name"})
 	if err != nil {
-		t.Fatalf("Command error: %s", err)
-	}
-
-	errStr := string(term.ErrBytes())
-	if errStr != "" {
-		t.Errorf("Error output: %q", errStr)
+		t.Fatal(err)
 	}
 
 	outStr := string(term.OutBytes())
@@ -69,17 +65,12 @@ func TestGitRenameCommandSuccess(t *testing.T) {
 	defer server.Close()
 
 	cc := cli.TestContext(term, auth)
-	flags := cli.ContextGlobalFlags(cc)
+	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
-	err := runCommand(cc, []string{"git", "rename", "repo-name", "new-name"})
+	err := runCommandNoErr(cc, []string{"git", "rename", "repo-name", "new-name"})
 	if err != nil {
-		t.Fatalf("Command error: %s", err)
-	}
-
-	errStr := string(term.ErrBytes())
-	if errStr != "" {
-		t.Errorf("Error output: %q", errStr)
+		t.Fatal(err)
 	}
 
 	exp := "Renamed repo-name repository to new-name\n"
@@ -116,17 +107,12 @@ func TestGitResetCommandSuccess(t *testing.T) {
 	defer server.Close()
 
 	cc := cli.TestContext(term, auth)
-	flags := cli.ContextGlobalFlags(cc)
+	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
-	err := runCommand(cc, []string{"git", "reset", "repo-name"})
+	err := runCommandNoErr(cc, []string{"git", "reset", "repo-name"})
 	if err != nil {
-		t.Fatalf("Command error: %s", err)
-	}
-
-	errStr := string(term.ErrBytes())
-	if errStr != "" {
-		t.Errorf("Error output: %q", errStr)
+		t.Fatal(err)
 	}
 
 	outStr := string(term.OutBytes())

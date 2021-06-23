@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/gemfury/cli/internal/ctx"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -16,7 +17,7 @@ func NewRootCommand(cc context.Context) *cobra.Command {
 	}
 
 	// Connect I/O
-	term := ctxTerminal(cc)
+	term := ctx.Terminal(cc)
 	rootCmd.SetIn(term.IOIn())
 	rootCmd.SetOut(term.IOOut())
 	rootCmd.SetErr(term.IOErr())
@@ -27,7 +28,7 @@ func NewRootCommand(cc context.Context) *cobra.Command {
 	}
 
 	// Global flags (account, verbose, etc)
-	flags := ContextGlobalFlags(cc)
+	flags := ctx.GlobalFlags(cc)
 	rootFlagSet := rootCmd.PersistentFlags()
 	rootFlagSet.StringVar(&flags.AuthToken, "api-token", "", "Inline authentication token")
 	rootFlagSet.StringVar(&flags.Account, "account", "", "Current account username")

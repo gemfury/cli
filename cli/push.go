@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/gemfury/cli/api"
+	"github.com/gemfury/cli/internal/ctx"
 	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
 
@@ -25,7 +26,7 @@ func NewCmdPush() *cobra.Command {
 			}
 
 			cc := cmd.Context()
-			term := ctxTerminal(cc)
+			term := ctx.Terminal(cc)
 			c, err := newAPIClient(cc)
 			if err != nil {
 				return err
