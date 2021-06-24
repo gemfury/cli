@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http/httptest"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -19,6 +20,12 @@ import (
 var (
 	usageRegexp = regexp.MustCompilePOSIX("^Usage:$")
 )
+
+// Top-level testing initializer
+func TestMain(m *testing.M) {
+	os.Setenv("TZ", "US/Pacific")
+	os.Exit(m.Run())
+}
 
 func TestRootCommand(t *testing.T) {
 	auth := terminal.TestAuther("", "", nil)

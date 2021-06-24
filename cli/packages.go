@@ -56,7 +56,7 @@ func listPackages(cmd *cobra.Command, args []string) error {
 	// Handle no packages
 	if len(packages) == 0 {
 		term.Println("No packages found in this account")
-		return nil
+		return err
 	}
 
 	// Print results
@@ -69,7 +69,7 @@ func listPackages(cmd *cobra.Command, args []string) error {
 	}
 
 	w.Flush()
-	return nil
+	return err
 }
 
 func listVersions(cmd *cobra.Command, args []string) error {
@@ -108,7 +108,7 @@ func listVersions(cmd *cobra.Command, args []string) error {
 	}
 
 	w.Flush()
-	return nil
+	return err
 }
 
 func iterateAllPages(cc context.Context, fn func(req *api.PaginationRequest) (*api.PaginationResponse, error)) error {

@@ -1,8 +1,13 @@
 package testutil
 
 import (
+	"github.com/gemfury/cli/api"
+	"github.com/tomnomnom/linkheader"
+
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -16,6 +21,53 @@ const loginResponse = `{
 		}`
 
 func APIServer(t *testing.T, method, path, resp string, code int) *httptest.Server {
+	return handleAPIPath(t, method, path, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(code)
+		w.Write([]byte(resp))
+	})
+}
+
+// Allow responses to be paginated forward. Page param is just a string of "p" characters to
+// simplify implementation (without parsing), and prevent parsing page number as an integer
+func APIServerPaginated(t *testing.T, method, path string, resps []string, code int) *httptest.Server {
+	return handleAPIPath(t, method, path, func(w http.ResponseWriter, r *http.Request) {
+
+		// Page from JSON body or query
+		pageReq := api.PaginationRequest{}
+		page := len(r.URL.Query().Get("page"))
+		if err := json.NewDecoder(r.Body).Decode(&pageReq); err == nil && pageReq.Page != "" {
+			page = len(pageReq.Page)
+		}
+
+		// Out of bounds empty response
+		if page > len(resps) {
+			w.WriteHeader(code)
+			w.Write([]byte("[]"))
+			return
+		}
+
+		// Populate "Link" header
+		if page < len(resps)-1 {
+			newURL := *r.URL // Copy incoming URL
+			newURL.Scheme, newURL.Host = "", ""
+
+			query := newURL.Query()
+			query.Set("page", strings.Repeat("p", page+1))
+			newURL.RawQuery = query.Encode()
+			linkStr := linkheader.Links{
+				{URL: newURL.String(), Rel: "next"},
+			}.String()
+
+			t.Logf("Next page Link: %s", linkStr)
+			w.Header().Set("Link", linkStr)
+		}
+
+		w.WriteHeader(code)
+		w.Write([]byte(resps[page]))
+	})
+}
+
+func handleAPIPath(t *testing.T, method, path string, hf http.HandlerFunc) *httptest.Server {
 	h := http.NewServeMux()
 
 	h.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
@@ -23,10 +75,10 @@ func APIServer(t *testing.T, method, path, resp string, code int) *httptest.Serv
 
 		if r.Method != method {
 			w.WriteHeader(http.StatusNotImplemented)
+			return
 		}
 
-		w.WriteHeader(code)
-		w.Write([]byte(resp))
+		hf(w, r)
 	})
 
 	h.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {

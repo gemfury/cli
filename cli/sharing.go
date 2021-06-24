@@ -49,7 +49,7 @@ func listMembers(cmd *cobra.Command, args []string) error {
 	// Handle no packages
 	if len(members) == 0 {
 		term.Println("No members found for this account")
-		return nil
+		return err
 	}
 
 	// Print results
@@ -62,7 +62,7 @@ func listMembers(cmd *cobra.Command, args []string) error {
 	}
 
 	w.Flush()
-	return nil
+	return err
 }
 
 // NewCmdSharingAdd generates the Cobra command for "sharing:add"
@@ -82,10 +82,12 @@ func NewCmdSharingAdd() *cobra.Command {
 				return err
 			}
 
+			var multiErr *multierror.Error
 			for _, name := range args {
 				err := c.AddCollaborator(cc, name)
 
 				if err != nil {
+					multiErr = multierror.Append(multiErr, err)
 					log.Printf("Problem adding %q: %s\n", name, err)
 					continue
 				}
@@ -93,7 +95,7 @@ func NewCmdSharingAdd() *cobra.Command {
 				term.Printf("Invited %q as a collaborator\n", name)
 			}
 
-			return nil
+			return multiErr.Unwrap()
 		},
 	}
 
