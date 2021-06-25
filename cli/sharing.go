@@ -168,7 +168,7 @@ func NewCmdAccounts() *cobra.Command {
 			// Handle no packages
 			if len(members) == 0 {
 				term.Println("No collaborations found for this account")
-				return nil
+				return err
 			}
 
 			// Print results
@@ -180,7 +180,7 @@ func NewCmdAccounts() *cobra.Command {
 			}
 
 			w.Flush()
-			return nil
+			return err
 		},
 	}
 

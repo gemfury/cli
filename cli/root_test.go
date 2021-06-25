@@ -74,6 +74,7 @@ func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Serv
 
 	cc := cli.TestContext(term, auth)
 	flags := ctx.GlobalFlags(cc)
+	flags.PushEndpoint = server.URL
 	flags.Endpoint = server.URL
 
 	// Prepare for login prompt
@@ -101,6 +102,7 @@ func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.
 
 	cc := cli.TestContext(term, auth)
 	flags := ctx.GlobalFlags(cc)
+	flags.PushEndpoint = server.URL
 	flags.Endpoint = server.URL
 
 	err := runCommand(cc, args)

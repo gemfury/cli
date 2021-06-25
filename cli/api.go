@@ -26,6 +26,9 @@ func newAPIClient(cc context.Context) (c *api.Client, err error) {
 	c = api.NewClient(token, flags.Account)
 
 	// Endpoint configuration for testing
+	if e := flags.PushEndpoint; e != "" {
+		c.PushEndpoint = e
+	}
 	if e := flags.Endpoint; e != "" {
 		c.Endpoint = e
 	}

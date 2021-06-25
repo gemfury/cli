@@ -15,9 +15,10 @@ const (
 )
 
 type CmdGlobalFlags struct {
-	Endpoint  string
-	AuthToken string
-	Account   string
+	PushEndpoint string
+	Endpoint     string
+	AuthToken    string
+	Account      string
 }
 
 func CmdContextWith(ctx context.Context, t terminal.Terminal, as terminal.Auther) context.Context {

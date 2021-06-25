@@ -41,8 +41,8 @@ func TestSharingCommandSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exp := "test-name     owner\ncollaborator  push\n"
-	if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
+	exp := "test-name owner collaborator push"
+	if outStr := compactString(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}
 }
@@ -140,5 +140,55 @@ func TestSharingRemoveForbidden(t *testing.T) {
 	server := testutil.APIServer(t, "DELETE", path, "{}", 403)
 	args := []string{"sharing", "remove", "fired@example.com"}
 	testCommandForbiddenResponse(t, args, server)
+	server.Close()
+}
+
+// ==== accounts ====
+
+var accountsResponses = []string{`[{
+	"id": "acct_a1b2c3",
+	"name": "my-name",
+	"username": "test-self",
+	"role": "owner"
+}]`, `[{
+	"id": "acct_z1y2x3",
+	"name": "org-name",
+	"username": "test-org",
+	"role": "push"
+}]`}
+
+func TestAccountsCommandSuccess(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	// Fire up test server
+	path := "/collaborations"
+	server := testutil.APIServerPaginated(t, "GET", path, accountsResponses, 200)
+	defer server.Close()
+
+	cc := cli.TestContext(term, auth)
+	flags := ctx.GlobalFlags(cc)
+	flags.Endpoint = server.URL
+
+	err := runCommandNoErr(cc, []string{"accounts"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := "my-name owner org-name push"
+	if outStr := compactString(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
+		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	}
+}
+
+func TestAccountsCommandUnauthorized(t *testing.T) {
+	server := testutil.APIServer(t, "GET", "/collaborations", "[]", 200)
+	testCommandLoginPreCheck(t, []string{"accounts"}, server)
+	server.Close()
+}
+
+func TestAccountsCommandForbidden(t *testing.T) {
+	server := testutil.APIServer(t, "GET", "/collaborations", "[]", 403)
+	testCommandForbiddenResponse(t, []string{"accounts"}, server)
 	server.Close()
 }

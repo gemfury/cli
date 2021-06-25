@@ -41,6 +41,13 @@ func DecodeResponseError(resp *http.Response) error {
 		return StatusCodeToError(resp.StatusCode)
 	}
 
+	switch apiErr.Error.Type {
+	case "Unauthorized":
+		return ErrUnauthorized
+	case "Forbidden":
+		return ErrForbidden
+	}
+
 	return apiErr.Error
 }
 

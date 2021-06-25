@@ -88,7 +88,7 @@ func NewCmdPush() *cobra.Command {
 				}
 			}
 
-			return multiErr.ErrorOrNil()
+			return multiErr.Unwrap()
 		},
 	}
 
