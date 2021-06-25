@@ -24,4 +24,13 @@ jobs:
       if: steps.cache.outputs.cache-hit != 'true'
       run: go mod download
     - name: Run tests
-      run: go test ./...
+      run: go test -coverprofile coverage.out ./...
+    - name: Check code coverage
+      run: |
+        go tool cover -func coverage.out | grep total | \
+        awk '{ if (70 <= substr($3, 1, length($3)-1)) { \
+          print("Coverage: " $3, "OK"); \
+        } else { \
+          print("Coverage: " $3, "FAIL"); \
+          exit(1) \
+        }}'
