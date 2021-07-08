@@ -48,6 +48,11 @@ func (tt *testTerm) SetPromptResponses(p map[string]string) {
 	tt.prompts = p
 }
 
+// Disable progress bar
+func (tt *testTerm) StartProgress(int64, string) Progress {
+	return noProgress{}
+}
+
 func (tt testTerm) RunPrompt(p *promptui.Prompt) (string, error) {
 	if l, ok := p.Label.(string); ok {
 		if out, ok := tt.prompts[l]; ok {

@@ -38,3 +38,13 @@ func (b bar) NewProxyReader(r io.Reader) io.Reader {
 func (b bar) Finish() {
 	b.ProgressBar.Finish()
 }
+
+type noProgress struct{}
+
+func (np noProgress) NewProxyReader(r io.Reader) io.Reader {
+	return r
+}
+
+func (np noProgress) Finish() {
+	return
+}
