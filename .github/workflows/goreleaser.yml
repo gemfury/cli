@@ -30,4 +30,5 @@ jobs:
           version: latest
           args: release --rm-dist
         env:
+          BREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
