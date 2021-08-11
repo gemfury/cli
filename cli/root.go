@@ -50,6 +50,11 @@ func NewRootCommand(cc context.Context) *cobra.Command {
 		NewCmdBeta(),
 	)
 
+	// FIXME: Disable "completion" command
+	rootCmd.CompletionOptions = cobra.CompletionOptions{
+		DisableDefaultCmd: true,
+	}
+
 	return rootCmd
 }
 
