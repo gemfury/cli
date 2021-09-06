@@ -134,3 +134,49 @@ func TestGitResetCommandForbidden(t *testing.T) {
 	testCommandForbiddenResponse(t, []string{"git", "reset", "repo-name"}, server)
 	server.Close()
 }
+
+// ==== GIT LIST ====
+
+var gitReposResponses = []string{`{ "repos": [{
+	"id": "repo_a1b2c3",
+	"name": "repoA"
+}]}`, `{ "repos" : [{
+	"id": "repo_z1y2x3",
+	"name": "repoZ"
+}]}`}
+
+func TestGitListCommandSuccess(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	// Fire up test server
+	path := "/git/repos/me"
+	server := testutil.APIServerPaginated(t, "GET", path, gitReposResponses, 200)
+	defer server.Close()
+
+	cc := cli.TestContext(term, auth)
+	flags := ctx.GlobalFlags(cc)
+	flags.Endpoint = server.URL
+
+	err := runCommandNoErr(cc, []string{"git", "list"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := "*** GEMFURY GIT REPOS *** repoA repoZ"
+	if outStr := compactString(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
+		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	}
+}
+
+func TestGitListCommandUnauthorized(t *testing.T) {
+	server := testutil.APIServer(t, "GET", "/git/repos/me", "{}", 200)
+	testCommandLoginPreCheck(t, []string{"git", "list"}, server)
+	server.Close()
+}
+
+func TestGitListCommandForbidden(t *testing.T) {
+	server := testutil.APIServer(t, "GET", "/git/repos/me", "", 403)
+	testCommandForbiddenResponse(t, []string{"git", "list"}, server)
+	server.Close()
+}

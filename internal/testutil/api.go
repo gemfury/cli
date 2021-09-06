@@ -88,5 +88,12 @@ func handleAPIPath(t *testing.T, method, path string, hf http.HandlerFunc) *http
 		w.Write([]byte(loginResponse))
 	})
 
+	if path != "/" {
+		h.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			t.Errorf("Unexpected: %s %s", r.Method, r.URL.String())
+			http.NotFound(w, r)
+		})
+	}
+
 	return httptest.NewServer(h)
 }

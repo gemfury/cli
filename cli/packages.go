@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Root for sharing/collaboration subcommands
+// NewCmdPackages creates the "packages" command
 func NewCmdPackages() *cobra.Command {
 	return &cobra.Command{
 		Use:     "packages",
@@ -24,6 +24,7 @@ func NewCmdPackages() *cobra.Command {
 	}
 }
 
+// NewCmdVersions creates the "versions" command
 func NewCmdVersions() *cobra.Command {
 	return &cobra.Command{
 		Use:   "versions PACKAGE",
