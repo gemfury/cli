@@ -138,3 +138,43 @@ func TestGitConfigSetCommandForbidden(t *testing.T) {
 	testCommandForbiddenResponse(t, []string{"git", "config", "set", "repo-name", "KEY2=VALUE2"}, server)
 	server.Close()
 }
+
+// ==== GIT CONFIG UNSET ====
+
+func TestGitConfigUnsetCommandSuccess(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	// Fire up test server
+	path := "/git/repos/me/repo-name/config-vars"
+	server := testutil.APIServer(t, "PATCH", path, gitConfigResponse, 200)
+	defer server.Close()
+
+	cc := cli.TestContext(term, auth)
+	flags := ctx.GlobalFlags(cc)
+	flags.Endpoint = server.URL
+
+	err := runCommandNoErr(cc, []string{"git", "config", "unset", "repo-name", "KEY2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := "Updated repo-name repository config"
+	if outStr := compactString(term.OutBytes()); outStr != exp {
+		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	}
+}
+
+func TestGitConfigUnsetCommandUnauthorized(t *testing.T) {
+	path := "/git/repos/me/repo-name/config-vars"
+	server := testutil.APIServer(t, "PATCH", path, "{}", 200)
+	testCommandLoginPreCheck(t, []string{"git", "config", "unset", "repo-name", "KEY2"}, server)
+	server.Close()
+}
+
+func TestGitConfigUnsetCommandForbidden(t *testing.T) {
+	path := "/git/repos/me/repo-name/config-vars"
+	server := testutil.APIServer(t, "PATCH", path, "", 403)
+	testCommandForbiddenResponse(t, []string{"git", "config", "unset", "repo-name", "KEY2"}, server)
+	server.Close()
+}

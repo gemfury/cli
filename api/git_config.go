@@ -17,7 +17,9 @@ func (c *Client) GitConfig(cc context.Context, repo string) ([]GitConfigPair, er
 
 	out := make([]GitConfigPair, 0, len(resp.ConfigVars))
 	for k, v := range resp.ConfigVars {
-		out = append(out, GitConfigPair{k, v})
+		if v != nil { // Should not happen
+			out = append(out, GitConfigPair{k, *v})
+		}
 	}
 
 	return out, nil
@@ -25,7 +27,7 @@ func (c *Client) GitConfig(cc context.Context, repo string) ([]GitConfigPair, er
 
 // Git Config request/response
 type gitConfigJSON struct {
-	ConfigVars map[string]string `json:"config_vars"`
+	ConfigVars map[string]*string `json:"config_vars"`
 }
 
 // Repo represents Git Config KV pair
@@ -35,7 +37,7 @@ type GitConfigPair struct {
 }
 
 // GitConfigSet updates Git Config with passed-in map of new variables
-func (c *Client) GitConfigSet(cc context.Context, repo string, vars map[string]string) error {
+func (c *Client) GitConfigSet(cc context.Context, repo string, vars map[string]*string) error {
 	path := "/git/repos/{acct}/" + url.PathEscape(repo) + "/config-vars"
 	req := c.newRequest(cc, "PATCH", path, false)
 	c.prepareJSONBody(req, &gitConfigJSON{vars})
