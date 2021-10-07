@@ -97,6 +97,7 @@ func (c *Client) prepareJSONBody(req *request, data interface{}) error {
 		return err
 	}
 
+	req.ContentLength = int64(len(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Body = ioutil.NopCloser(bytes.NewReader(body))
 	return nil

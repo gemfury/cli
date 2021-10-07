@@ -15,6 +15,7 @@ func NewCmdGitRoot() *cobra.Command {
 		Short: "Git repository commands",
 	}
 
+	gitCmd.AddCommand(NewCmdGitConfig())
 	gitCmd.AddCommand(NewCmdGitRebuild())
 	gitCmd.AddCommand(NewCmdGitRename())
 	gitCmd.AddCommand(NewCmdGitReset())
