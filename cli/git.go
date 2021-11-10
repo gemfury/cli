@@ -16,24 +16,32 @@ func NewCmdGitRoot() *cobra.Command {
 	}
 
 	gitCmd.AddCommand(NewCmdGitConfig())
+	gitCmd.AddCommand(NewCmdGitDestroy())
 	gitCmd.AddCommand(NewCmdGitRebuild())
 	gitCmd.AddCommand(NewCmdGitRename())
-	gitCmd.AddCommand(NewCmdGitReset())
 	gitCmd.AddCommand(NewCmdGitList())
 
 	return gitCmd
 }
 
-// NewCmdGitReset generates the Cobra command for "git:reset"
-func NewCmdGitReset() *cobra.Command {
-	resetCmd := &cobra.Command{
-		Use:   "reset REPO",
-		Short: "Remove Git repository",
+// NewCmdGitDestroy generates the Cobra command for "git:destroy"
+func NewCmdGitDestroy() *cobra.Command {
+	var resetOnly bool
+
+	destroyCmd := &cobra.Command{
+		Use:     "destroy REPO",
+		Aliases: []string{"reset"},
+		Short:   "Remove Git repository",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			term := ctx.Terminal(cmd.Context())
 
 			if len(args) != 1 {
 				return fmt.Errorf("Please specify a repository")
+			}
+
+			// Reset-only when called as "git:reset"
+			if cmd.CalledAs() == "reset" {
+				resetOnly = true
 			}
 
 			cc := cmd.Context()
@@ -42,17 +50,25 @@ func NewCmdGitReset() *cobra.Command {
 				return err
 			}
 
-			err = c.GitReset(cc, args[0])
+			err = c.GitDestroy(cc, args[0], resetOnly)
 			if err != nil {
 				return err
 			}
 
-			term.Printf("Removed %s repository\n", args[0])
+			if resetOnly {
+				term.Printf("Reset %s repository\n", args[0])
+			} else {
+				term.Printf("Removed %s repository\n", args[0])
+			}
+
 			return nil
 		},
 	}
 
-	return resetCmd
+	// Flags and options
+	destroyCmd.Flags().BoolVar(&resetOnly, "reset-only", false, "Reset repo without destroying")
+
+	return destroyCmd
 }
 
 // NewCmdGitRename generates the Cobra command for "git:reset"

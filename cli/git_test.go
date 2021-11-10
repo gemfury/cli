@@ -5,6 +5,8 @@ import (
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/internal/testutil"
 	"github.com/gemfury/cli/pkg/terminal"
+
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -95,22 +97,27 @@ func TestGitRenameCommandForbidden(t *testing.T) {
 	server.Close()
 }
 
-// ==== GIT RESET ====
+// ==== GIT DESTROY ====
 
-func TestGitResetCommandSuccess(t *testing.T) {
+func TestGitDestroyCommandSuccess(t *testing.T) {
 	auth := terminal.TestAuther("user", "abc123", nil)
 	term := terminal.NewForTest()
 
-	// Fire up test server
+	// Destroy without reset
 	path := "/git/repos/me/repo-name"
-	server := testutil.APIServer(t, "DELETE", path, "{}", 200)
-	defer server.Close()
+	serverDestroy := testutil.APIServerCustom(t, "DELETE", path, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Has("reset") {
+			t.Errorf("Has extraneous reset=1 URL query")
+		}
+		w.Write([]byte("{}"))
+	})
+	defer serverDestroy.Close()
 
 	cc := cli.TestContext(term, auth)
 	flags := ctx.GlobalFlags(cc)
-	flags.Endpoint = server.URL
+	flags.Endpoint = serverDestroy.URL
 
-	err := runCommandNoErr(cc, []string{"git", "reset", "repo-name"})
+	err := runCommandNoErr(cc, []string{"git", "destroy", "repo-name"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,19 +126,58 @@ func TestGitResetCommandSuccess(t *testing.T) {
 	if exp := "Removed repo-name repository\n"; !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}
+
+	// Reset without destroying repo
+	serverReset := testutil.APIServerCustom(t, "DELETE", path, func(w http.ResponseWriter, r *http.Request) {
+		if q := r.URL.Query(); q.Get("reset") != "1" {
+			t.Errorf("Missing reset=1 URL query")
+		}
+		w.Write([]byte("{}"))
+	})
+	defer serverReset.Close()
+
+	// Via "--reset-only" option
+	cc = cli.TestContext(term, auth)
+	flags = ctx.GlobalFlags(cc)
+	flags.Endpoint = serverReset.URL
+
+	err = runCommandNoErr(cc, []string{"git", "destroy", "--reset-only", "repo-name"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outStr = string(term.OutBytes())
+	if exp := "Reset repo-name repository\n"; !strings.HasSuffix(outStr, exp) {
+		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	}
+
+	// Via "git:reset" command
+	cc = cli.TestContext(term, auth)
+	flags = ctx.GlobalFlags(cc)
+	flags.Endpoint = serverReset.URL
+
+	err = runCommandNoErr(cc, []string{"git", "reset", "repo-name"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outStr = string(term.OutBytes())
+	if exp := "Reset repo-name repository\n"; !strings.HasSuffix(outStr, exp) {
+		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	}
 }
 
-func TestGitResetCommandUnauthorized(t *testing.T) {
+func TestGitDestroyCommandUnauthorized(t *testing.T) {
 	path := "/git/repos/me/repo-name"
 	server := testutil.APIServer(t, "DELETE", path, "{}", 200)
-	testCommandLoginPreCheck(t, []string{"git", "reset", "repo-name"}, server)
+	testCommandLoginPreCheck(t, []string{"git", "destroy", "repo-name"}, server)
 	server.Close()
 }
 
-func TestGitResetCommandForbidden(t *testing.T) {
+func TestGitDestroyCommandForbidden(t *testing.T) {
 	path := "/git/repos/me/repo-name"
 	server := testutil.APIServer(t, "DELETE", path, "", 403)
-	testCommandForbiddenResponse(t, []string{"git", "reset", "repo-name"}, server)
+	testCommandForbiddenResponse(t, []string{"git", "destroy", "repo-name"}, server)
 	server.Close()
 }
 

@@ -21,7 +21,7 @@ const loginResponse = `{
 		}`
 
 func APIServer(t *testing.T, method, path, resp string, code int) *httptest.Server {
-	return handleAPIPath(t, method, path, func(w http.ResponseWriter, r *http.Request) {
+	return APIServerCustom(t, method, path, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(code)
 		w.Write([]byte(resp))
 	})
@@ -30,7 +30,7 @@ func APIServer(t *testing.T, method, path, resp string, code int) *httptest.Serv
 // Allow responses to be paginated forward. Page param is just a string of "p" characters to
 // simplify implementation (without parsing), and prevent parsing page number as an integer
 func APIServerPaginated(t *testing.T, method, path string, resps []string, code int) *httptest.Server {
-	return handleAPIPath(t, method, path, func(w http.ResponseWriter, r *http.Request) {
+	return APIServerCustom(t, method, path, func(w http.ResponseWriter, r *http.Request) {
 
 		// Page from JSON body or query
 		pageReq := api.PaginationRequest{}
@@ -67,7 +67,7 @@ func APIServerPaginated(t *testing.T, method, path string, resps []string, code 
 	})
 }
 
-func handleAPIPath(t *testing.T, method, path string, hf http.HandlerFunc) *httptest.Server {
+func APIServerCustom(t *testing.T, method, path string, hf http.HandlerFunc) *httptest.Server {
 	h := http.NewServeMux()
 
 	h.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {

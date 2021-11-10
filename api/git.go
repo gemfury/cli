@@ -35,9 +35,17 @@ type GitRepo struct {
 	Name string `json:"name"`
 }
 
-// GitReset removes a Gemfury Git repository
-func (c *Client) GitReset(cc context.Context, repo string) error {
+// GitDestroy either fully removes a Gemfury Git repository, or resets the repo
+// by deleting content but keeping its history, configuraion, and related metadata.
+func (c *Client) GitDestroy(cc context.Context, repo string, resetOnly bool) error {
 	path := "/git/repos/{acct}/" + url.PathEscape(repo)
+
+	// Resets Git repository content without destroying it
+	// Keeping ID, build history, configuration, etc
+	if resetOnly {
+		path = path + "?reset=1"
+	}
+
 	req := c.newRequest(cc, "DELETE", path, false)
 	return req.doJSON(nil)
 }
