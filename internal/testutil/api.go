@@ -21,66 +21,76 @@ const loginResponse = `{
 		}`
 
 func APIServer(t *testing.T, method, path, resp string, code int) *httptest.Server {
-	return APIServerCustom(t, method, path, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(code)
-		w.Write([]byte(resp))
+	return APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			t.Logf("API Request: %s %s", r.Method, r.URL.String())
+
+			if r.Method != method {
+				w.WriteHeader(http.StatusNotImplemented)
+				return
+			}
+
+			w.WriteHeader(code)
+			w.Write([]byte(resp))
+		})
 	})
 }
 
 // Allow responses to be paginated forward. Page param is just a string of "p" characters to
 // simplify implementation (without parsing), and prevent parsing page number as an integer
 func APIServerPaginated(t *testing.T, method, path string, resps []string, code int) *httptest.Server {
-	return APIServerCustom(t, method, path, func(w http.ResponseWriter, r *http.Request) {
+	return APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			t.Logf("API Request: %s %s", r.Method, r.URL.String())
 
-		// Page from JSON body or query
-		pageReq := api.PaginationRequest{}
-		page := len(r.URL.Query().Get("page"))
-		if err := json.NewDecoder(r.Body).Decode(&pageReq); err == nil && pageReq.Page != "" {
-			page = len(pageReq.Page)
-		}
+			if r.Method != method {
+				w.WriteHeader(http.StatusNotImplemented)
+				return
+			}
 
-		// Out of bounds empty response
-		if page > len(resps) {
+			// Page from JSON body or query
+			pageReq := api.PaginationRequest{}
+			page := len(r.URL.Query().Get("page"))
+			if err := json.NewDecoder(r.Body).Decode(&pageReq); err == nil && pageReq.Page != "" {
+				page = len(pageReq.Page)
+			}
+
+			// Out of bounds empty response
+			if page > len(resps) {
+				w.WriteHeader(code)
+				w.Write([]byte("[]"))
+				return
+			}
+
+			// Populate "Link" header
+			if page < len(resps)-1 {
+				newURL := *r.URL // Copy incoming URL
+				newURL.Scheme, newURL.Host = "", ""
+
+				query := newURL.Query()
+				query.Set("page", strings.Repeat("p", page+1))
+				newURL.RawQuery = query.Encode()
+				linkStr := linkheader.Links{
+					{URL: newURL.String(), Rel: "next"},
+				}.String()
+
+				t.Logf("Next page Link: %s", linkStr)
+				w.Header().Set("Link", linkStr)
+			}
+
 			w.WriteHeader(code)
-			w.Write([]byte("[]"))
-			return
-		}
-
-		// Populate "Link" header
-		if page < len(resps)-1 {
-			newURL := *r.URL // Copy incoming URL
-			newURL.Scheme, newURL.Host = "", ""
-
-			query := newURL.Query()
-			query.Set("page", strings.Repeat("p", page+1))
-			newURL.RawQuery = query.Encode()
-			linkStr := linkheader.Links{
-				{URL: newURL.String(), Rel: "next"},
-			}.String()
-
-			t.Logf("Next page Link: %s", linkStr)
-			w.Header().Set("Link", linkStr)
-		}
-
-		w.WriteHeader(code)
-		w.Write([]byte(resps[page]))
+			w.Write([]byte(resps[page]))
+		})
 	})
 }
 
-func APIServerCustom(t *testing.T, method, path string, hf http.HandlerFunc) *httptest.Server {
+func APIServerCustom(t *testing.T, custom func(*http.ServeMux)) *httptest.Server {
 	h := http.NewServeMux()
 
-	h.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-		t.Logf("API Request: %s %s", r.Method, r.URL.String())
+	// Add custom path handlers
+	custom(h)
 
-		if r.Method != method {
-			w.WriteHeader(http.StatusNotImplemented)
-			return
-		}
-
-		hf(w, r)
-	})
-
+	// Default handler for auth
 	h.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			w.WriteHeader(http.StatusNotImplemented)
@@ -88,7 +98,9 @@ func APIServerCustom(t *testing.T, method, path string, hf http.HandlerFunc) *ht
 		w.Write([]byte(loginResponse))
 	})
 
-	if path != "/" {
+	// Check if mux has a handler for "/"
+	rootRequest := httptest.NewRequest("GET", "/", nil)
+	if _, pattern := h.Handler(rootRequest); pattern == "" {
 		h.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			t.Errorf("Unexpected: %s %s", r.Method, r.URL.String())
 			http.NotFound(w, r)

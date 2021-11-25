@@ -105,11 +105,13 @@ func TestGitDestroyCommandSuccess(t *testing.T) {
 
 	// Destroy without reset
 	path := "/git/repos/me/repo-name"
-	serverDestroy := testutil.APIServerCustom(t, "DELETE", path, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Has("reset") {
-			t.Errorf("Has extraneous reset=1 URL query")
-		}
-		w.Write([]byte("{}"))
+	serverDestroy := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Query().Has("reset") {
+				t.Errorf("Has extraneous reset=1 URL query")
+			}
+			w.Write([]byte("{}"))
+		})
 	})
 	defer serverDestroy.Close()
 
@@ -128,11 +130,13 @@ func TestGitDestroyCommandSuccess(t *testing.T) {
 	}
 
 	// Reset without destroying repo
-	serverReset := testutil.APIServerCustom(t, "DELETE", path, func(w http.ResponseWriter, r *http.Request) {
-		if q := r.URL.Query(); q.Get("reset") != "1" {
-			t.Errorf("Missing reset=1 URL query")
-		}
-		w.Write([]byte("{}"))
+	serverReset := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			if q := r.URL.Query(); q.Get("reset") != "1" {
+				t.Errorf("Missing reset=1 URL query")
+			}
+			w.Write([]byte("{}"))
+		})
 	})
 	defer serverReset.Close()
 
