@@ -59,8 +59,11 @@ func (c *Client) GitRename(cc context.Context, repo, newName string) error {
 }
 
 // GitRename renames a Gemfury Git repository
-func (c *Client) GitRebuild(cc context.Context, out io.Writer, repo string) error {
+func (c *Client) GitRebuild(cc context.Context, out io.Writer, repo, revision string) error {
 	path := "/git/repos/{acct}/" + url.PathEscape(repo) + "/builds"
+	if revision != "" {
+		path = path + "?build[revision]=" + url.QueryEscape(revision)
+	}
 	req := c.newRequest(cc, "POST", path, false)
 	return req.doWithOutput(out)
 }

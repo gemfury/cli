@@ -21,15 +21,28 @@ func TestGitRebuildCommandSuccess(t *testing.T) {
 	auth := terminal.TestAuther("user", "abc123", nil)
 	term := terminal.NewForTest()
 
+	// Revision input, output
+	revSrc := "refs/tags/v1.2.3"
+	var revDst string
+
 	// Fire up test server
 	path := "/git/repos/me/repo-name/builds"
-	server := testutil.APIServer(t, "POST", path, gitRebuildResponse, 200)
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			if m := r.Method; m != "POST" {
+				t.Errorf("Incorrect method: %q", m)
+			}
+			revDst = r.URL.Query().Get("build[revision]")
+			w.Write([]byte(gitRebuildResponse))
+		})
+	})
 	defer server.Close()
 
 	cc := cli.TestContext(term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
+	// No revision specified
 	err := runCommandNoErr(cc, []string{"git", "rebuild", "repo-name"})
 	if err != nil {
 		t.Fatal(err)
@@ -38,6 +51,37 @@ func TestGitRebuildCommandSuccess(t *testing.T) {
 	outStr := string(term.OutBytes())
 	if exp := gitRebuildResponse; !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	} else if revDst != "" {
+		t.Errorf("Expected no revision, got %q", revDst)
+	}
+
+	// Revision specified with full flag
+	err = runCommandNoErr(cc, []string{"git", "rebuild", "repo-name", "--revision", revSrc})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outStr = string(term.OutBytes())
+	if exp := gitRebuildResponse; !strings.HasSuffix(outStr, exp) {
+		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	} else if revDst != revSrc {
+		t.Errorf("Expected %q revision, got %q", revSrc, revDst)
+	}
+
+	// Revision specified with short flag
+	err = runCommandNoErr(cc, []string{"git", "rebuild", "repo-name", "-r", revSrc})
+	if err != nil {
+		t.Fatal(err)
+	} else if revDst != revSrc {
+		t.Errorf("Expected %q revision, got %q", revSrc, revDst)
+	}
+
+	// Revision specified with "@" separator
+	err = runCommandNoErr(cc, []string{"git", "rebuild", "repo-name@" + revSrc})
+	if err != nil {
+		t.Fatal(err)
+	} else if revDst != revSrc {
+		t.Errorf("Expected %q revision, got %q", revSrc, revDst)
 	}
 }
 

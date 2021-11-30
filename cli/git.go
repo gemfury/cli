@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"fmt"
+	"strings"
 )
 
 // Root for Git subcommands
@@ -104,6 +105,8 @@ func NewCmdGitRename() *cobra.Command {
 
 // NewCmdGitConfigSet sets build configuration keys
 func NewCmdGitRebuild() *cobra.Command {
+	var revisionFlag string
+
 	rebuildCmd := &cobra.Command{
 		Use:   "rebuild REPO",
 		Short: "Run the builder on the repo",
@@ -120,8 +123,21 @@ func NewCmdGitRebuild() *cobra.Command {
 				return err
 			}
 
-			term.Printf("Building %s repository...\n", args[0])
-			err = c.GitRebuild(cc, term.IOOut(), args[0])
+			repo, rev := args[0], ""
+			if revisionFlag != "" {
+				rev = revisionFlag
+			} else if at := strings.LastIndex(repo, "@"); at > 0 {
+				repo, rev = repo[0:at], repo[at+1:]
+			}
+
+			msg := fmt.Sprintf("Building %s repository", repo)
+			if rev != "" {
+				msg = msg + " at " + rev
+			}
+			msg = msg + " ...\n"
+
+			term.Printf(msg)
+			err = c.GitRebuild(cc, term.IOOut(), repo, rev)
 			if err != nil {
 				return err
 			}
@@ -129,6 +145,9 @@ func NewCmdGitRebuild() *cobra.Command {
 			return nil
 		},
 	}
+
+	// Flags and options
+	rebuildCmd.Flags().StringVarP(&revisionFlag, "revision", "r", "", "Revision")
 
 	return rebuildCmd
 }
