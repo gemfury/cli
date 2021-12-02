@@ -16,6 +16,7 @@ import (
 // NewCmdPush generates the Cobra command for "push"
 func NewCmdPush() *cobra.Command {
 	var noProgress bool
+	var isPublic bool
 
 	pushCmd := &cobra.Command{
 		Use:   "push PACKAGE",
@@ -57,7 +58,7 @@ func NewCmdPush() *cobra.Command {
 						defer bar.Finish()
 					}
 
-					err = c.PushPkg(cc, name, reader)
+					err = c.PushPkg(cc, name, isPublic, reader)
 					return err
 				}()
 
@@ -94,6 +95,7 @@ func NewCmdPush() *cobra.Command {
 
 	// Flags and options
 	pushCmd.Flags().BoolVar(&noProgress, "quiet", false, "Do not show progress bar")
+	pushCmd.Flags().BoolVar(&isPublic, "public", false, "Create as public package")
 
 	return pushCmd
 }

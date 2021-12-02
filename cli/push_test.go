@@ -9,6 +9,7 @@ import (
 
 	"errors"
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -22,10 +23,35 @@ const pushResponse = `{}`
 func TestPushCommandSuccess(t *testing.T) {
 	auth := terminal.TestAuther("user", "abc123", nil)
 	term := terminal.NewForTest()
+	var publicVal string
 
 	// Fire up test server
-	path := "/uploads"
-	server := testutil.APIServer(t, "POST", path, pushResponse, 200)
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/uploads", func(w http.ResponseWriter, r *http.Request) {
+			if m := r.Method; m != "POST" {
+				t.Errorf("Incorrect method: %q", m)
+			}
+
+			err := r.ParseMultipartForm(1e6)
+			if err != nil || r.MultipartForm == nil {
+				t.Fatalf("ParseMultipartForm err: %s", err)
+			}
+
+			mf := r.MultipartForm
+			if len(mf.File["file"]) == 0 {
+				t.Errorf("No 'file' form field")
+			}
+
+			if vv := mf.Value["public"]; len(vv) != 0 {
+				publicVal = vv[0]
+			} else {
+				publicVal = ""
+			}
+
+			w.Write([]byte(pushResponse))
+		})
+	})
+
 	defer server.Close()
 
 	cc := cli.TestContext(term, auth)
@@ -33,15 +59,32 @@ func TestPushCommandSuccess(t *testing.T) {
 	flags.PushEndpoint = server.URL
 	flags.Endpoint = server.URL
 
-	args := []string{"push", samplePackagePath()}
-	err := runCommandNoErr(cc, args)
+	packagePath := samplePackagePath()
+
+	// Regular push without options
+	err := runCommandNoErr(cc, []string{"push", packagePath})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	exp := fmt.Sprintf("Uploading %s - done", filepath.Base(args[1]))
+	exp := fmt.Sprintf("Uploading %s - done", filepath.Base(packagePath))
 	if outStr := compactString(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	} else if publicVal != "" {
+		t.Errorf("Expected private, got %q", publicVal)
+	}
+
+	// Regular push with "public"
+	err = runCommandNoErr(cc, []string{"push", "--public", samplePackagePath()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp = fmt.Sprintf("Uploading %s - done", filepath.Base(packagePath))
+	if outStr := compactString(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
+		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	} else if publicVal != "true" {
+		t.Errorf("Expected public, got %q", publicVal)
 	}
 }
 

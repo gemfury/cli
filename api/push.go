@@ -7,11 +7,17 @@ import (
 )
 
 // PushPkg uploads a single package file to the current account
-func (c *Client) PushPkg(cc context.Context, filename string, r io.Reader) error {
+func (c *Client) PushPkg(cc context.Context, filename string, isPublic bool, r io.Reader) error {
 	bodyR, bodyW := io.Pipe()
 	writer := multipart.NewWriter(bodyW)
 
 	go func() {
+		// Public vs. private
+		if isPublic {
+			writer.WriteField("public", "true")
+		}
+
+		// Stream file content
 		ff, err := writer.CreateFormFile("file", filename)
 		if err != nil {
 			bodyW.CloseWithError(err)
