@@ -20,8 +20,8 @@ var (
 	// ErrNotFound is the error for 404 from server
 	ErrNotFound = errors.New("Doesn't look like this exists")
 
-	// Account has an exclusive locked for another operation
-	ErrConflict = errors.New("Locked for another user. Try again later.")
+	// Account has an exclusive lock on the resource. Mostly used for Git repos.
+	ErrConflict = errors.New("Locked for update by another operation. Try again later.")
 )
 
 // errorResponse is the JSON response for error from Gemfury API
