@@ -104,7 +104,7 @@ func listVersions(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(w, "version\tuploaded_by\tuploaded_at\n")
 
 	for _, v := range versions {
-		uploadedAt := v.CreatedAt.Local().Format("2006-01-02 15:04")
+		uploadedAt := timeStringWithAgo(v.CreatedAt)
 		fmt.Fprintf(w, "%s\t%s\t%s\n", v.Version, v.DisplayCreatedBy(), uploadedAt)
 	}
 
