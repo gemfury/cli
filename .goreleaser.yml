@@ -50,6 +50,28 @@ changelog:
 release:
   draft: true
 
+nfpms:
+  - id: nfpm-default
+    package_name: fury-cli
+
+    vendor: Gemfury.com
+    homepage: https://fury.co
+    maintainer: Gemfury Team <team@gemfury.com>
+    description: Gemfury CLI
+    license: Proprietary
+
+    formats:
+      - deb
+
+    bindir: /usr/bin
+
+publishers:
+  - name: gemfury-repo
+    dir: "{{ dir .ArtifactPath }}"
+    cmd: curl -s -F p1=@{{ .ArtifactName }} https://{{ .Env.FURY_PUSH_TOKEN }}@push.fury.io/cli/
+    ids:
+      - nfpm-default
+
 brews:
   -
     # Name template of the recipe

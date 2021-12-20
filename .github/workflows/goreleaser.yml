@@ -31,4 +31,5 @@ jobs:
           args: release --rm-dist
         env:
           BREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          FURY_PUSH_TOKEN: ${{ secrets.FURY_PUSH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
