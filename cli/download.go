@@ -4,6 +4,7 @@ import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/pkg/terminal"
+	"github.com/hashicorp/go-multierror"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 
@@ -30,8 +31,58 @@ func NewCmdBeta() *cobra.Command {
 	}
 
 	betaCmd.AddCommand(NewCmdBackup())
+	betaCmd.AddCommand(NewCmdDownload())
 
 	return betaCmd
+}
+
+// NewCmdDownload creates a Cobra command for "download"
+func NewCmdDownload() *cobra.Command {
+	return &cobra.Command{
+		Use:   "download PACKAGE@VERSION",
+		Short: "Download a package to the current directory",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return downloadVersions(cmd, args)
+		},
+	}
+}
+
+func downloadVersions(cmd *cobra.Command, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("Please specify at least one version")
+	}
+
+	cc := cmd.Context()
+	c, err := newAPIClient(cc)
+	if err != nil {
+		return err
+	}
+
+	var multiErr *multierror.Error
+	for _, arg := range args {
+		var pkg, ver string
+
+		if at := strings.LastIndex(arg, "@"); at > 0 {
+			pkg, ver = arg[0:at], arg[at+1:]
+		} else {
+			err := fmt.Errorf("Argument format: PACKAGE@VERSION")
+			multiErr = multierror.Append(multiErr, err)
+			continue
+		}
+
+		v, err := c.Version(cc, pkg, ver)
+		if err != nil {
+			multiErr = multierror.Append(multiErr, err)
+			continue
+		}
+
+		filename := strings.ReplaceAll(v.Filename, string(filepath.Separator), "_")
+		if err := downloadVersion(cc, c, v, ".", filename); err != nil {
+			multiErr = multierror.Append(multiErr, err)
+		}
+	}
+
+	return multiErr.Unwrap()
 }
 
 // NewCmdBackup creates a Cobra command for "backup"
@@ -95,15 +146,17 @@ func backupEverything(cmd *cobra.Command, args []string, kindFlag string) error 
 }
 
 func backupVersion(cc context.Context, client *api.Client, v *api.Version, destDir string) error {
-	term := ctx.Terminal(cc)
-
 	slash := string(filepath.Separator)
 	pkgName := strings.ReplaceAll(v.Package.Name, slash, "_")
 	fileName := strings.ReplaceAll(v.ID+"_"+v.Filename, slash, "_")
 	subPath := slash + v.Package.Kind + slash + pkgName + slash + fileName
+	return downloadVersion(cc, client, v, destDir, filepath.Clean(subPath))
+}
 
-	// Sanitize and join destDir
-	subPath = filepath.Clean(subPath)
+func downloadVersion(cc context.Context, client *api.Client, v *api.Version, destDir, subPath string) error {
+	slash := string(filepath.Separator)
+	term := ctx.Terminal(cc)
+
 	path := filepath.Clean(filepath.Join(destDir, subPath))
 	pkgDir := filepath.Dir(path)
 

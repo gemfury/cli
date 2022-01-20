@@ -36,6 +36,16 @@ func (c *Client) Versions(cc context.Context, pkg string, body *PaginationReques
 	return &resp, err
 }
 
+// Version returns the details of a specific version of a package
+func (c *Client) Version(cc context.Context, pkg, ver string) (*Version, error) {
+	path := "/packages/" + url.PathEscape(pkg) + "/versions/" + url.PathEscape(ver)
+	req := c.newRequest(cc, "GET", path+"?expand=package", true)
+
+	resp := Version{}
+	err := req.doJSON(&resp)
+	return &resp, err
+}
+
 // PackageResponse represents details from Packages API call
 type PackagesResponse struct {
 	Pagination *PaginationResponse

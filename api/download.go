@@ -28,6 +28,7 @@ func (c *Client) DumpVersions(cc context.Context, body *PaginationRequest, kindF
 	return &resp, err
 }
 
+// DownloadVersion uses the "download_url" field to download the Version file
 func (c *Client) DownloadVersion(cc context.Context, v *Version) (io.ReadCloser, int64, error) {
 	if !strings.HasPrefix(v.DownloadURL, c.Endpoint) {
 		return nil, 0, fmt.Errorf("Download URL not compatible with API client")
