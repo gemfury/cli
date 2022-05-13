@@ -5,6 +5,7 @@ import (
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/internal/testutil"
 	"github.com/gemfury/cli/pkg/terminal"
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -82,6 +83,41 @@ func TestSharingAddCommandSuccess(t *testing.T) {
 	exp := "Invited \"added@example.com\" as a collaborator\n"
 	if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	}
+}
+
+func TestSharingAddWithRoleCommandSuccess(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	// Fire up test server
+	roleQuery := "unchanged-by-server"
+	path := "/collaborators/owner@example.com"
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			if m := r.Method; m != "PUT" {
+				t.Errorf("Incorrect method: %q", m)
+			}
+			roleQuery = r.URL.Query().Get("role")
+			w.Write([]byte("{}"))
+		})
+	})
+	defer server.Close()
+
+	cc := cli.TestContext(term, auth)
+	flags := ctx.GlobalFlags(cc)
+	flags.Endpoint = server.URL
+
+	err := runCommandNoErr(cc, []string{"sharing", "add", "owner@example.com", "--role", "owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := "Invited \"owner@example.com\" as a collaborator\n"
+	if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
+		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	} else if r := roleQuery; r != "owner" {
+		t.Errorf(`Expected role to be "owner", got %q`, r)
 	}
 }
 

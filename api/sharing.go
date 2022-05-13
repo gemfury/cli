@@ -6,8 +6,12 @@ import (
 )
 
 // AddCollaborator invites a collaborator via username or email
-func (c *Client) AddCollaborator(cc context.Context, name string) error {
-	req := c.newRequest(cc, "PUT", "/collaborators/"+url.PathEscape(name), true)
+func (c *Client) AddCollaborator(cc context.Context, name, role string) error {
+	path := "/collaborators/" + url.PathEscape(name)
+	if role != "" {
+		path = path + "?role=" + url.QueryEscape(role)
+	}
+	req := c.newRequest(cc, "PUT", path, true)
 	return req.doJSON(nil)
 }
 

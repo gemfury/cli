@@ -67,6 +67,8 @@ func listMembers(cmd *cobra.Command, args []string) error {
 
 // NewCmdSharingAdd generates the Cobra command for "sharing:add"
 func NewCmdSharingAdd() *cobra.Command {
+	var roleFlag string
+
 	addCmd := &cobra.Command{
 		Use:   "add EMAIL",
 		Short: "Add a collaborator",
@@ -84,7 +86,7 @@ func NewCmdSharingAdd() *cobra.Command {
 
 			var multiErr *multierror.Error
 			for _, name := range args {
-				err := c.AddCollaborator(cc, name)
+				err := c.AddCollaborator(cc, name, roleFlag)
 
 				if err != nil {
 					multiErr = multierror.Append(multiErr, err)
@@ -99,12 +101,15 @@ func NewCmdSharingAdd() *cobra.Command {
 		},
 	}
 
+	// Flags and options
+	addCmd.Flags().StringVar(&roleFlag, "role", "", "Collaborator role")
+
 	return addCmd
 }
 
 // NewCmdSharingRemove generates the Cobra command for "sharing:add"
 func NewCmdSharingRemove() *cobra.Command {
-	addCmd := &cobra.Command{
+	rmCmd := &cobra.Command{
 		Use:   "remove EMAIL",
 		Short: "Remove a collaborator",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -136,7 +141,7 @@ func NewCmdSharingRemove() *cobra.Command {
 		},
 	}
 
-	return addCmd
+	return rmCmd
 }
 
 // Root for sharing/collaboration subcommands
