@@ -36,9 +36,12 @@ func (n nrc) Auth() (string, string, error) {
 		return "", "", err
 	}
 
-	// Load up the netrc file
+	// Load up the netrc file. ParseFile uses os.Open
+	// And will return *PathError if it's not readable
 	net, err := netrc.ParseFile(path)
-	if err != nil {
+	if os.IsNotExist(err) {
+		return "", "", nil
+	} else if err != nil {
 		return "", "", fmt.Errorf("Error reading .netrc file %q: %w", path, err)
 	}
 
