@@ -6,7 +6,7 @@ Gemfury CLI (preview)
 
 This is the Gemfury CLI used to manage your Gemfury packages from the command line.  If you're
 familiar with the service and want to jump straight into command line action, please proceed to
-the [CLI documentation](https://gemfury.com/help/gemfury-cli).
+the [CLI documentation](https://gemfury.com/guide/cli/).
 
 Gemfury is your personal cloud for your private and custom RubyGems, Python packages, and NPM
 modules.  Once you upload your packages and enable Gemfury as a source, you can securely deploy
@@ -18,9 +18,9 @@ any package to any host. It's simple, reliable, and hassle-free.
 * [Getting started with Gemfury](https://gemfury.com/help/getting-started)
 
 ### Using Gemfury CLI
-* [CLI documentation](https://gemfury.com/help/gemfury-cli)
-* [Uploading private packages](https://gemfury.com/help/gemfury-cli#uploading-packages)
-* [Manage collaborators](https://gemfury.com/help/gemfury-cli#collaboration)
+* [CLI documentation](https://gemfury.com/guide/cli/)
+* [Uploading private packages](https://gemfury.com/guide/cli/basic-usage/)
+* [Manage collaborators](https://gemfury.com/guide/cli/collaboration/)
 
 ## Contribution and Improvements
 
