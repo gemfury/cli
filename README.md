@@ -1,5 +1,5 @@
-Gemfury CLI (preview)
-=====================
+Gemfury CLI
+===========
 
 [![Gem Version](https://badge.fury.io/go/github.com%2Fgemfury%2Fcli.svg)](https://badge.fury.io/go/github.com%2Fgemfury%2Fcli)
 [![Build Status](https://github.com/gemfury/cli/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/gemfury/cli/actions/workflows/tests.yml)
