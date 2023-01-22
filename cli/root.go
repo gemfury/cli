@@ -22,10 +22,10 @@ func NewRootCommand(cc context.Context) *cobra.Command {
 	rootCmd.SetOut(term.IOOut())
 	rootCmd.SetErr(term.IOErr())
 
-	// Ensure authentication for all commands except "logout"
-	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		return preRunCheckAuthentication(cmd, args)
-	}
+	// // Ensure authentication for all commands except "logout"
+	// rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+	// 	return preRunCheckAuthentication(cmd, args)
+	// }
 
 	// Global flags (account, verbose, etc)
 	flags := ctx.GlobalFlags(cc)
