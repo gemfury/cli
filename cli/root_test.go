@@ -68,6 +68,7 @@ func runCommandNoErr(cc context.Context, args []string) error {
 	return nil
 }
 
+// We first test with manual (prompt) login, and then test with "--api-token" flag
 func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Server) {
 	auth := terminal.TestAuther("", "", nil)
 	term := terminal.NewForTest()
@@ -93,6 +94,18 @@ func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Serv
 		t.Errorf("Expected user %q, got %q", exp, u)
 	} else if exp := "token-abc-123"; p != exp {
 		t.Errorf("Expected pass %q, got %q", exp, p)
+	}
+
+	// Testing with "--api-token" should skip calling Auth() on TestAuther
+	auth = terminal.TestAuther("", "", fmt.Errorf("TestAuther should not be called"))
+	cc = cli.TestContext(term, auth)
+	flags = ctx.GlobalFlags(cc)
+	flags.PushEndpoint = server.URL
+	flags.Endpoint = server.URL
+
+	args = append(args, "--api-token", "abc123")
+	if err := runCommand(cc, args); err != nil {
+		t.Errorf("Command error: %s", err)
 	}
 }
 

@@ -14,12 +14,9 @@ func newAPIClient(cc context.Context) (c *api.Client, err error) {
 	flags := ctx.GlobalFlags(cc)
 
 	// Token comes from CLI flags or .netrc
-	token := flags.AuthToken
-	if token == "" {
-		_, token, err = ctx.Auther(cc).Auth()
-		if err != nil {
-			return nil, err
-		}
+	token, err := contextAuthToken(cc)
+	if err != nil {
+		return nil, err
 	}
 
 	// Initialize client with authentication
@@ -36,6 +33,15 @@ func newAPIClient(cc context.Context) (c *api.Client, err error) {
 	return c, nil
 }
 
+// Extract authentication token from context (flag or .netrc)
+func contextAuthToken(cc context.Context) (string, error) {
+	if token := ctx.GlobalFlags(cc).AuthToken; token != "" {
+		return token, nil
+	}
+	_, token, err := ctx.Auther(cc).Auth()
+	return token, err
+}
+
 // Hook for root command to ensure user is authenticated or prompt to login
 func preRunCheckAuthentication(cmd *cobra.Command, args []string) error {
 	if n := cmd.Name(); n == "logout" {
@@ -49,7 +55,7 @@ func preRunCheckAuthentication(cmd *cobra.Command, args []string) error {
 func ensureAuthenticated(cmd *cobra.Command) (*api.AccountResponse, error) {
 	cc := cmd.Context()
 
-	if _, token, err := ctx.Auther(cc).Auth(); token != "" || err != nil {
+	if token, err := contextAuthToken(cc); token != "" || err != nil {
 		return nil, err
 	}
 
