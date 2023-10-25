@@ -75,9 +75,11 @@ func netrcUpdate(update func(net *netrc.Netrc)) error {
 		return err
 	}
 
-	// Load up the .netrc file
+	// Load or create .netrc file
 	net, err := netrc.ParseFile(path)
-	if err != nil {
+	if os.IsNotExist(err) {
+		net, _ = netrc.Parse(bytes.NewReader(nil))
+	} else if err != nil {
 		return fmt.Errorf("Error reading .netrc %q: %w", path, err)
 	}
 

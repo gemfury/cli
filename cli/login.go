@@ -83,7 +83,13 @@ func NewCmdLogin() *cobra.Command {
 			}
 
 			term := ctx.Terminal(cmd.Context())
-			term.Printf("You are logged in as %q\n", user.Name)
+
+			if ctx.GlobalFlags(cmd.Context()).AuthToken != "" {
+				term.Printf("API token belongs to %q\n", user.Name)
+			} else {
+				term.Printf("You are logged in as %q\n", user.Name)
+			}
+
 			return nil
 		},
 	}
