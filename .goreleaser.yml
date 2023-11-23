@@ -79,7 +79,7 @@ brews:
     name: fury-cli
 
     # GitHub repository to receive formula
-    tap:
+    repository:
       owner: gemfury
       name: homebrew-tap
       token: "{{ .Env.BREW_TAP_GITHUB_TOKEN }}"
