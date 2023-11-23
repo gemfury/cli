@@ -6,7 +6,7 @@ import (
 	"net/url"
 )
 
-// Packages returns the details of the package listing
+// GitList returns a listing of Git repositories for an account
 func (c *Client) GitList(cc context.Context, body *PaginationRequest) (*GitReposResponse, error) {
 	req := c.newRequest(cc, "GET", "/git/repos/{acct}", false)
 
@@ -31,8 +31,26 @@ type GitReposResponse struct {
 
 // Repo represents Git Repo JSON
 type GitRepo struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Stack struct {
+		Name string `json:"name"`
+	} `json:"build_stack"`
+}
+
+// GitInfo returns the details of a specific Git repository
+func (c *Client) GitInfo(cc context.Context, repo string) (*GitRepo, error) {
+	path := "/git/repos/{acct}/" + url.PathEscape(repo)
+	req := c.newRequest(cc, "GET", path, false)
+
+	resp := gitInfoResponse{}
+	err := req.doJSON(&resp)
+	return &resp.Repo, err
+}
+
+// gitInfoResponse represents details from Git Info API call
+type gitInfoResponse struct {
+	Repo GitRepo `json:"repo"`
 }
 
 // GitDestroy either fully removes a Gemfury Git repository, or resets the repo
