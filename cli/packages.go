@@ -101,11 +101,11 @@ func listVersions(cmd *cobra.Command, args []string) error {
 	// Print results
 	term.Printf("\n*** %s versions ***\n\n", args[0])
 	w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "version\tuploaded_by\tuploaded_at\n")
+	fmt.Fprintf(w, "version\tuploaded_by\tuploaded_at\tfilename\n")
 
 	for _, v := range versions {
 		uploadedAt := timeStringWithAgo(v.CreatedAt)
-		fmt.Fprintf(w, "%s\t%s\t%s\n", v.Version, v.DisplayCreatedBy(), uploadedAt)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", v.Version, v.DisplayCreatedBy(), uploadedAt, v.Filename)
 	}
 
 	w.Flush()
