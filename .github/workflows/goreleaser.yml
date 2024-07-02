@@ -20,15 +20,13 @@ jobs:
           fetch-depth: 0
       -
         name: Install Go
-        uses: actions/setup-go@v4
-        with:
-          go-version-file: 'go.mod'
+        uses: actions/setup-go@v5
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v2
+        uses: goreleaser/goreleaser-action@v6
         with:
+          version: '~> v2'
           distribution: goreleaser
-          version: latest
           args: release --clean
         env:
           BREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

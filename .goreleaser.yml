@@ -1,9 +1,5 @@
-project_name: fury
-
-before:
-  hooks:
-    - go mod tidy
-    - go generate ./...
+project_name: fury-cli
+version: 2
 
 builds:
   - binary: fury
@@ -17,14 +13,13 @@ builds:
       - windows
     goarch:
       - amd64
-      - 386
-      - arm
       - arm64
     goarm:
       - 7
-    ignore:
-      - goos: darwin
-        goarch: 386
+
+universal_binaries:
+  - name_template: fury
+    replace: true
 
 archives:
   - format: tar.gz
@@ -35,18 +30,18 @@ archives:
     name_template: >-
       {{- .ProjectName }}_{{ .Version }}_
       {{- if eq .Os "darwin" }}macOS
-      {{- else }}{{- title .Os }}{{ end -}}_
-      {{- if eq .Arch "amd64" }}64bit
-      {{- else if eq .Arch "386" }}32bit
+      {{- else }}{{- title .Os }}{{ end }}_
+      {{- if eq .Arch "all" }}universal
+      {{- else if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "arm64" }}ARM64
-      {{- else if eq .Arch "arm" }}ARMv7
       {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end -}}
 
 checksum:
-  name_template: 'checksums.txt'
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
 
 changelog:
-  skip: true
+  disable: true
 
 release:
   draft: true
@@ -90,7 +85,7 @@ brews:
       name: goreleaser
 
     # Folder inside the repository to put the formula.
-    folder: Formula
+    directory: Formula
 
     # App's homepage.
     homepage: "https://gemfury.com/"
