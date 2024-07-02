@@ -4,6 +4,7 @@ import (
 	"github.com/briandowns/spinner"
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
+	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/spf13/cobra"
 
 	"context"
@@ -89,7 +90,7 @@ func listVersions(cmd *cobra.Command, args []string) error {
 
 	// Paginate over package listings until no more pages
 	err = iterateAllPages(cc, func(pageReq *api.PaginationRequest) (*api.PaginationResponse, error) {
-		resp, err := c.Versions(cc, args[0], pageReq)
+		resp, err := c.PackageVersions(cc, args[0], pageReq)
 		if err != nil {
 			return nil, err
 		}
@@ -100,16 +101,20 @@ func listVersions(cmd *cobra.Command, args []string) error {
 
 	// Print results
 	term.Printf("\n*** %s versions ***\n\n", args[0])
+	termPrintVersions(term, versions)
+	return err
+}
+
+func termPrintVersions(term terminal.Terminal, versions []*api.Version) {
 	w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "version\tuploaded_by\tuploaded_at\tfilename\n")
+	fmt.Fprintf(w, "version\tuploaded_by\tuploaded_at\tkind\tfilename\n")
 
 	for _, v := range versions {
 		uploadedAt := timeStringWithAgo(v.CreatedAt)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", v.Version, v.DisplayCreatedBy(), uploadedAt, v.Filename)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", v.Version, v.DisplayCreatedBy(), uploadedAt, v.Kind(), v.Filename)
 	}
 
 	w.Flush()
-	return err
 }
 
 func iterateAllPages(cc context.Context, fn func(req *api.PaginationRequest) (*api.PaginationResponse, error)) error {

@@ -22,8 +22,23 @@ func (c *Client) Packages(cc context.Context, body *PaginationRequest) (*Package
 }
 
 // Versions returns the details of the versions listing for a package
-func (c *Client) Versions(cc context.Context, pkg string, body *PaginationRequest) (*VersionsResponse, error) {
+func (c *Client) PackageVersions(cc context.Context, pkg string, body *PaginationRequest) (*VersionsResponse, error) {
 	req := c.newRequest(cc, "GET", "/packages/"+url.PathEscape(pkg)+"/versions?expand=package", true)
+
+	if body != nil {
+		c.prepareJSONBody(req, body)
+	}
+
+	resp := VersionsResponse{}
+	pagination, err := req.doPaginatedJSON(&resp.Versions)
+	resp.Pagination = pagination
+
+	return &resp, err
+}
+
+// Versions returns the details of the versions listing for specified filters
+func (c *Client) Versions(cc context.Context, filter url.Values, body *PaginationRequest) (*VersionsResponse, error) {
+	req := c.newRequest(cc, "GET", "/versions?expand=package&"+filter.Encode(), true)
 
 	if body != nil {
 		c.prepareJSONBody(req, body)
@@ -105,6 +120,13 @@ type VersionDigests struct {
 func (v Version) DisplayCreatedBy() string {
 	if a := v.CreatedBy; a != nil {
 		return a.Name
+	}
+	return "N/A"
+}
+
+func (v Version) Kind() string {
+	if p := v.Package; p != nil && p.Kind != "" {
+		return p.Kind
 	}
 	return "N/A"
 }

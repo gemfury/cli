@@ -49,39 +49,44 @@ func APIServerPaginated(t *testing.T, method, path string, resps []string, code 
 			}
 
 			// Page from JSON body or query
-			pageReq := api.PaginationRequest{}
-			page := len(r.URL.Query().Get("page"))
-			if err := json.NewDecoder(r.Body).Decode(&pageReq); err == nil && pageReq.Page != "" {
-				page = len(pageReq.Page)
-			}
-
-			// Out of bounds empty response
-			if page > len(resps) {
-				w.WriteHeader(code)
-				w.Write([]byte("[]"))
-				return
-			}
-
-			// Populate "Link" header
-			if page < len(resps)-1 {
-				newURL := *r.URL // Copy incoming URL
-				newURL.Scheme, newURL.Host = "", ""
-
-				query := newURL.Query()
-				query.Set("page", strings.Repeat("p", page+1))
-				newURL.RawQuery = query.Encode()
-				linkStr := linkheader.Links{
-					{URL: newURL.String(), Rel: "next"},
-				}.String()
-
-				t.Logf("Next page Link: %s", linkStr)
-				w.Header().Set("Link", linkStr)
-			}
-
-			w.WriteHeader(code)
-			w.Write([]byte(resps[page]))
+			APIPaginatedResponse(t, w, r, resps, code)
 		})
 	})
+}
+
+func APIPaginatedResponse(t *testing.T, w http.ResponseWriter, r *http.Request, resps []string, code int) {
+	// Page from JSON body or query
+	pageReq := api.PaginationRequest{}
+	page := len(r.URL.Query().Get("page"))
+	if err := json.NewDecoder(r.Body).Decode(&pageReq); err == nil && pageReq.Page != "" {
+		page = len(pageReq.Page)
+	}
+
+	// Out of bounds empty response
+	if page > len(resps) {
+		w.WriteHeader(code)
+		w.Write([]byte("[]"))
+		return
+	}
+
+	// Populate "Link" header
+	if page < len(resps)-1 {
+		newURL := *r.URL // Copy incoming URL
+		newURL.Scheme, newURL.Host = "", ""
+
+		query := newURL.Query()
+		query.Set("page", strings.Repeat("p", page+1))
+		newURL.RawQuery = query.Encode()
+		linkStr := linkheader.Links{
+			{URL: newURL.String(), Rel: "next"},
+		}.String()
+
+		t.Logf("Next page Link: %s", linkStr)
+		w.Header().Set("Link", linkStr)
+	}
+
+	w.WriteHeader(code)
+	w.Write([]byte(resps[page]))
 }
 
 func APIServerCustom(t *testing.T, custom func(*http.ServeMux)) *httptest.Server {

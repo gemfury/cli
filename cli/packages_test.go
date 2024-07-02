@@ -68,13 +68,23 @@ var versionsResponses = []string{`[{
 	"id": "ver_a1b2c3",
 	"version": "1.2.3",
 	"created_at": "2011-05-27T00:39:07+00:00",
+	"filename": "foo-1.2.3.tgz",
 	"created_by": {
 		"name": "user1"
+	},
+	"package": {
+		"id": "pkg_x9y8z7",
+		"kind": "js"
 	}
 }]`, `[{
 	"id": "ver_z1y2x3",
 	"version": "3.2.1",
-	"created_at": "2011-01-27T00:44:00+00:00"
+	"created_at": "2011-01-27T00:44:00+00:00",
+	"filename": "foo-3.2.1.tgz",
+	"package": {
+		"id": "pkg_x9y8z7",
+		"kind": "js"
+	}
 }]`}
 
 func TestVersionsCommandSuccess(t *testing.T) {
@@ -95,7 +105,7 @@ func TestVersionsCommandSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exp := "1.2.3 user1 2011-05-26 17:39 3.2.1 N/A 2011-01-26 16:44"
+	exp := "1.2.3 user1 2011-05-26 17:39 js foo-1.2.3.tgz 3.2.1 N/A 2011-01-26 16:44 js foo-3.2.1.tgz"
 	if outStr := compactString(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}

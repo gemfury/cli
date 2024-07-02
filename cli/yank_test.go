@@ -18,8 +18,25 @@ func TestYankCommandOnePackage(t *testing.T) {
 	term := terminal.NewForTest()
 
 	// Fire up test server
-	path := "/packages/foo/versions/0.0.1"
-	server := testutil.APIServer(t, "DELETE", path, "{}", 200)
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/versions", func(w http.ResponseWriter, r *http.Request) {
+			if q := r.URL.Query(); q.Get("name") != "foo" || q.Get("version") != "0.0.1" {
+				t.Errorf("Invalid request: %s %s", r.Method, r.URL.Path)
+			} else if k := q.Get("kind"); k == "js" {
+				w.Write([]byte(versionsResponses[0])) // One page
+			} else if method := r.Method; method != "GET" {
+				t.Errorf("Invalid method: %s %s", method, r.URL.Path)
+			}
+			testutil.APIPaginatedResponse(t, w, r, versionsResponses, 200)
+		})
+		mux.HandleFunc("/packages/{pid}/versions/{vid}", func(w http.ResponseWriter, r *http.Request) {
+			if method := r.Method; method != "DELETE" {
+				t.Errorf("Invalid request: %s %s", method, r.URL.Path)
+				w.WriteHeader(500)
+			}
+			w.Write([]byte("{}"))
+		})
+	})
 	defer server.Close()
 
 	cc := cli.TestContext(term, auth)
@@ -27,24 +44,30 @@ func TestYankCommandOnePackage(t *testing.T) {
 	flags.Endpoint = server.URL
 
 	// Removing using version flag
-	err := runCommandNoErr(cc, []string{"yank", "foo", "-v", "0.0.1"})
+	err := runCommandNoErr(cc, []string{"yank", "foo", "-v", "0.0.1", "--force"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	exp := "Removed package \"foo\" version \"0.0.1\"\n"
+	exp := "Removed \"foo-1.2.3.tgz\"\nRemoved \"foo-3.2.1.tgz\"\n"
 	if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}
 
 	// Removing using PACKAGE@VERSION
-	err = runCommandNoErr(cc, []string{"yank", "foo@0.0.1"})
+	err = runCommandNoErr(cc, []string{"yank", "foo@0.0.1", "--force"})
 	if err != nil {
 		t.Fatal(err)
+	} else if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
+		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}
 
-	exp = "Removed package \"foo\" version \"0.0.1\"\n"
-	if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
+	// Removing using KIND:PACKAGE@VERSION
+	exp = "Removed \"foo-1.2.3.tgz\"\n" // JS kind returns one Version
+	err = runCommandNoErr(cc, []string{"yank", "js:foo@0.0.1", "--force"})
+	if err != nil {
+		t.Fatal(err)
+	} else if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}
 
@@ -61,20 +84,27 @@ func TestYankCommandMultiPackage(t *testing.T) {
 
 	// Fire up test server
 	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
-		mux.HandleFunc("/packages/foo/versions/0.0.1", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/versions", func(w http.ResponseWriter, r *http.Request) {
+			if q := r.URL.Query(); q.Get("name") != "foo" {
+				t.Errorf("Invalid name: %s %s", r.Method, r.URL.Path)
+			} else if v := q.Get("version"); v == "0.0.2" {
+				w.Write([]byte("[]")) // Nothing found
+			} else if v != "0.0.1" {
+				t.Errorf("Invalid version: %s %s", r.Method, r.URL.Path)
+			} else if method := r.Method; method != "GET" {
+				t.Errorf("Invalid method: %s %s", method, r.URL.Path)
+			} else {
+				testutil.APIPaginatedResponse(t, w, r, versionsResponses, 200)
+			}
+		})
+		mux.HandleFunc("/packages/{pid}/versions/{vid}", func(w http.ResponseWriter, r *http.Request) {
 			if method := r.Method; method != "DELETE" {
 				t.Errorf("Invalid request: %s %s", method, r.URL.Path)
+				w.WriteHeader(500)
 			}
 			w.Write([]byte("{}"))
 		})
-		mux.HandleFunc("/packages/foo/versions/0.0.2", func(w http.ResponseWriter, r *http.Request) {
-			if method := r.Method; method != "DELETE" {
-				t.Errorf("Invalid request: %s %s", method, r.URL.Path)
-			}
-			http.NotFound(w, r)
-		})
 	})
-
 	defer server.Close()
 
 	cc := cli.TestContext(term, auth)
@@ -82,7 +112,7 @@ func TestYankCommandMultiPackage(t *testing.T) {
 	flags.Endpoint = server.URL
 
 	// Expected successful output
-	exp := "Removed package \"foo\" version \"0.0.1\"\n"
+	exp := "Removed \"foo-1.2.3.tgz\"\nRemoved \"foo-3.2.1.tgz\"\n"
 
 	// Failure for multiple packages without version
 	err := runCommandNoErr(cc, []string{"yank", "foo", "bar"})
@@ -96,32 +126,44 @@ func TestYankCommandMultiPackage(t *testing.T) {
 		t.Errorf("Expected invalid error, got %q", err)
 	}
 
-	// Partial failure for multiple packages
-	err = runCommandNoErr(cc, []string{"yank", "foo@0.0.1", "foo@0.0.2"})
-	if err == nil || !strings.Contains(err.Error(), "Doesn't look like this exists") {
-		t.Errorf("Expected invalid error, got %q", err)
+	// When nothing is found, we expect "nothing found" error message
+	expNone := "No matching versions found\n"
+	err = runCommandNoErr(cc, []string{"yank", "foo@0.0.2", "--force"})
+	if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, expNone) {
+		t.Errorf("Expected output to include %q, got %q", expNone, outStr)
 	}
-	if outStr := string(term.OutBytes()); !strings.Contains(outStr, exp) {
+
+	// No partial failure for multiple packages when some return nothing
+	err = runCommandNoErr(cc, []string{"yank", "foo@0.0.1", "foo@0.0.2", "--force"})
+	if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}
 
 	// Success all around (reusing the same test package URL)
-	err = runCommandNoErr(cc, []string{"yank", "foo@0.0.1", "foo@0.0.1"})
+	err = runCommandNoErr(cc, []string{"yank", "foo@0.0.1", "foo@0.0.1", "--force"})
+	if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
+		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	}
+
+	// Success all around with confirmation prompt
+	term.SetPromptResponses(map[string]string{
+		"Are you sure you want to delete these files? [y/N]": "Y",
+	})
+
+	err = runCommandNoErr(cc, []string{"yank", "foo@0.0.1"})
 	if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}
 }
 
 func TestYankCommandUnauthorized(t *testing.T) {
-	path := "/packages/foo/versions/0.0.1"
-	server := testutil.APIServer(t, "DELETE", path, "{}", 200)
+	server := testutil.APIServer(t, "GET", "/versions", "[]", 200)
 	testCommandLoginPreCheck(t, []string{"yank", "foo", "-v", "0.0.1"}, server)
 	server.Close()
 }
 
 func TestYankCommandForbidden(t *testing.T) {
-	path := "/packages/foo/versions/0.0.1"
-	server := testutil.APIServer(t, "DELETE", path, "", 403)
+	server := testutil.APIServer(t, "GET", "/versions", "", 403)
 	testCommandForbiddenResponse(t, []string{"yank", "foo", "-v", "0.0.1"}, server)
 	server.Close()
 }
