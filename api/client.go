@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -134,7 +135,9 @@ func (r *request) doCommon() (*http.Response, error) {
 	}
 
 	resp, err := r.conduit.Do(r.Request)
-	if err != nil {
+	if os.IsTimeout(err) {
+		return resp, ErrTimeout
+	} else if err != nil {
 		return resp, err
 	}
 

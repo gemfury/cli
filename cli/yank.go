@@ -3,12 +3,11 @@ package cli
 import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
+	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/hashicorp/go-multierror"
-	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -69,14 +68,8 @@ func NewCmdYank() *cobra.Command {
 
 			if !forceFlag {
 				termPrintVersions(term, versions)
-				prompt := promptui.Prompt{
-					Label:     "Are you sure you want to delete these files? [y/N]",
-					IsConfirm: true,
-				}
-				_, err := term.RunPrompt(&prompt)
-				if errors.Is(err, promptui.ErrAbort) {
-					return nil
-				} else if err != nil {
+				confirm := "Are you sure you want to delete these files? [y/N]"
+				if ok, err := terminal.PromptConfirm(term, confirm); !ok {
 					return err
 				}
 			}

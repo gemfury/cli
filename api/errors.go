@@ -11,6 +11,9 @@ var (
 	// ErrFuryServer is the error for 5xx server errors
 	ErrFuryServer = errors.New("Something went wrong. Please contact support.")
 
+	// ErrTimeout is the error for 408 from server or net timeout
+	ErrTimeout = errors.New("Operation timed out. Try again later.")
+
 	// ErrUnauthorized is the error for 401 from server
 	ErrUnauthorized = errors.New("Authentication failure")
 
@@ -60,6 +63,8 @@ func StatusCodeToError(s int) error {
 		return ErrForbidden
 	case s == 404:
 		return ErrNotFound
+	case s == 408:
+		return ErrTimeout
 	case s == 409:
 		return ErrConflict
 	case s >= 200 && s < 300:

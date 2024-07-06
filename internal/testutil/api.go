@@ -95,7 +95,28 @@ func APIServerCustom(t *testing.T, custom func(*http.ServeMux)) *httptest.Server
 	// Add custom path handlers
 	custom(h)
 
-	// Default handler for auth
+	// Default handler for browser auth
+	h.HandleFunc("/cli/auth", func(w http.ResponseWriter, r *http.Request) {
+		if m := r.Method; m == "POST" {
+			w.Write([]byte(`{
+				  "browser_url": "https://gemfury.com",
+				  "cli_url": "/cli/auth?wait=true",
+				  "token": "xyz-123"
+			  }`))
+		} else if m == "GET" {
+			if a := r.Header.Get("Authorization"); a != "Bearer xyz-123" {
+				t.Errorf("Incorrect Authorization: %q", m)
+			}
+			w.Write([]byte(`{
+				  "user": { "email" : "u@example.com" },
+				  "token": "token-abc-123"
+			  }`))
+		} else {
+			t.Errorf("Incorrect method: %q", m)
+		}
+	})
+
+	// Default handler for interactive auth
 	h.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			w.WriteHeader(http.StatusNotImplemented)

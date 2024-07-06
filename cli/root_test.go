@@ -69,20 +69,21 @@ func runCommandNoErr(cc context.Context, args []string) error {
 }
 
 // We first test with manual (prompt) login, and then test with "--api-token" flag
-func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Server) {
+func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Server, opts ...testOption) {
 	auth := terminal.TestAuther("", "", nil)
 	term := terminal.NewForTest()
 
 	cc := cli.TestContext(term, auth)
+	for _, opt := range opts {
+		cc = opt(cc)
+	}
+
 	flags := ctx.GlobalFlags(cc)
 	flags.PushEndpoint = server.URL
 	flags.Endpoint = server.URL
 
-	// Prepare for login prompt
-	term.SetPromptResponses(map[string]string{
-		"Email: ":    "user@example.com",
-		"Password: ": "secreto",
-	})
+	// Prepare for browser login prompt
+	term.InWrite([]byte("!"))
 
 	if err := runCommand(cc, args); err != nil {
 		t.Errorf("Command error: %s", err)
@@ -109,11 +110,15 @@ func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Serv
 	}
 }
 
-func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.Server) {
+func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.Server, opts ...testOption) {
 	auth := terminal.TestAuther("user", "abc123", nil)
 	term := terminal.NewForTest()
 
 	cc := cli.TestContext(term, auth)
+	for _, opt := range opts {
+		cc = opt(cc)
+	}
+
 	flags := ctx.GlobalFlags(cc)
 	flags.PushEndpoint = server.URL
 	flags.Endpoint = server.URL
@@ -131,4 +136,13 @@ func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.
 	if ob := term.OutBytes(); !usageRegexp.Match(ob) {
 		t.Errorf("Output isn't showing usage: \n%s", ob)
 	}
+}
+
+// Context altering options added to test commands
+type testOption func(context.Context) context.Context
+
+// No login option
+func noLoginOpt(cc context.Context) context.Context {
+	ctx.Auther(cc).Wipe()
+	return cc
 }

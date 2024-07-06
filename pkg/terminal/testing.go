@@ -53,13 +53,20 @@ func (tt *testTerm) StartProgress(int64, string) Progress {
 	return noProgress{}
 }
 
+// Fail to open browser progress bar
+func (tt *testTerm) OpenBrowser(string) bool {
+	return false
+}
+
 func (tt testTerm) RunPrompt(p *promptui.Prompt) (string, error) {
 	if l, ok := p.Label.(string); ok {
 		if out, ok := tt.prompts[l]; ok {
+			if out == "ABORT" {
+				return "", promptui.ErrAbort
+			}
 			return out, nil
 		}
 	}
-
 	return "", io.EOF
 }
 
