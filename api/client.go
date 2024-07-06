@@ -20,7 +20,7 @@ var (
 	hdrAcceptAPIv1 = "application/vnd.fury.v1"
 
 	// Default "User-Agent" header for Gemfury API requests
-	hdrUserAgent = "Gemfury Go-CLI %s"
+	hdrUserAgent = "Gemfury CLI %s"
 
 	// Default API endpoints
 	defaultPushEndpoint = "https://push.fury.io"
