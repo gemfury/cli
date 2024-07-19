@@ -96,25 +96,27 @@ func APIServerCustom(t *testing.T, custom func(*http.ServeMux)) *httptest.Server
 	custom(h)
 
 	// Default handler for browser auth
-	h.HandleFunc("/cli/auth", func(w http.ResponseWriter, r *http.Request) {
-		if m := r.Method; m == "POST" {
-			w.Write([]byte(`{
-				  "browser_url": "https://gemfury.com",
-				  "cli_url": "/cli/auth?wait=true",
-				  "token": "xyz-123"
-			  }`))
-		} else if m == "GET" {
-			if a := r.Header.Get("Authorization"); a != "Bearer xyz-123" {
-				t.Errorf("Incorrect Authorization: %q", m)
+	if !hasHandlerFor(h, "POST", "/cli/auth") {
+		h.HandleFunc("/cli/auth", func(w http.ResponseWriter, r *http.Request) {
+			if m := r.Method; m == "POST" {
+				w.Write([]byte(`{
+  				  "browser_url": "https://gemfury.com",
+  				  "cli_url": "/cli/auth?wait=true",
+  				  "token": "xyz-123"
+  			  }`))
+			} else if m == "GET" {
+				if a := r.Header.Get("Authorization"); a != "Bearer xyz-123" {
+					t.Errorf("Incorrect Authorization: %q", m)
+				}
+				w.Write([]byte(`{
+  				  "user": { "email" : "u@example.com" },
+  				  "token": "token-abc-123"
+  			  }`))
+			} else {
+				t.Errorf("Incorrect method: %q", m)
 			}
-			w.Write([]byte(`{
-				  "user": { "email" : "u@example.com" },
-				  "token": "token-abc-123"
-			  }`))
-		} else {
-			t.Errorf("Incorrect method: %q", m)
-		}
-	})
+		})
+	}
 
 	// Default handler for interactive auth
 	h.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
@@ -125,8 +127,7 @@ func APIServerCustom(t *testing.T, custom func(*http.ServeMux)) *httptest.Server
 	})
 
 	// Check if mux has a handler for "/"
-	rootRequest := httptest.NewRequest("GET", "/", nil)
-	if _, pattern := h.Handler(rootRequest); pattern == "" {
+	if !hasHandlerFor(h, "GET", "/") {
 		h.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			t.Errorf("Unexpected: %s %s", r.Method, r.URL.String())
 			http.NotFound(w, r)
@@ -134,4 +135,9 @@ func APIServerCustom(t *testing.T, custom func(*http.ServeMux)) *httptest.Server
 	}
 
 	return httptest.NewServer(h)
+}
+
+func hasHandlerFor(h *http.ServeMux, method, path string) bool {
+	_, pattern := h.Handler(httptest.NewRequest(method, path, nil))
+	return pattern != ""
 }

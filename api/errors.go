@@ -25,6 +25,9 @@ var (
 
 	// Account has an exclusive lock on the resource. Mostly used for Git repos.
 	ErrConflict = errors.New("Locked for update by another operation. Try again later.")
+
+	// Not implemented error for endpoints that are no longer supported
+	ErrNotImplemented = errors.New("This operation is not supported")
 )
 
 // errorResponse is the JSON response for error from Gemfury API
@@ -67,6 +70,8 @@ func StatusCodeToError(s int) error {
 		return ErrTimeout
 	case s == 409:
 		return ErrConflict
+	case s == 501:
+		return ErrNotImplemented
 	case s >= 200 && s < 300:
 		return nil
 	case s >= 500:

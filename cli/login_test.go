@@ -6,6 +6,7 @@ import (
 	"github.com/gemfury/cli/internal/testutil"
 	"github.com/gemfury/cli/pkg/terminal"
 
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -58,6 +59,42 @@ func TestLoginCommandInteractive(t *testing.T) {
 	})
 
 	err := runCommandNoErr(cc, []string{"login", "--interactive"})
+	if err != nil {
+		t.Error(err)
+	}
+
+	outStr := string(term.OutBytes())
+	if exp := "You are logged in as \"u@example.com\"\n"; !strings.Contains(outStr, exp) {
+		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	}
+}
+
+func TestLoginCommandInteractiveFallback(t *testing.T) {
+	auth := terminal.TestAuther("", "", nil)
+	term := terminal.NewForTest()
+
+	// Fire up test server that returns 501 for /cli/auth
+	server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
+		h.HandleFunc("/cli/auth", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotImplemented)
+		})
+		h.HandleFunc("/users/me", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(whoamiResponse))
+		})
+	})
+	defer server.Close()
+
+	cc := cli.TestContext(term, auth)
+	flags := ctx.GlobalFlags(cc)
+	flags.Endpoint = server.URL
+
+	term.SetPromptResponses(map[string]string{
+		"Email: ":    "u@example.com",
+		"Password: ": "secreto",
+	})
+
+	// User requests browser, but we fall back to interactive
+	err := runCommandNoErr(cc, []string{"login"})
 	if err != nil {
 		t.Error(err)
 	}

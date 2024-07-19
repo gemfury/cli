@@ -66,13 +66,19 @@ func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResp
 		return nil, err
 	}
 
-	// Browser or interactive login
+	// Trigger browser login
 	var resp *api.LoginResponse
+	if !interactive {
+		resp, err = browserLogin(cmd)
+		interactive = errors.Is(err, api.ErrNotImplemented)
+	}
+
+	// Trigger interactive login if requested by user
+	// or if browser returned "not-implemented"
 	if interactive {
 		resp, err = interactiveLogin(cmd)
-	} else {
-		resp, err = browserLogin(cmd)
 	}
+
 	if err != nil {
 		return nil, err
 	}
