@@ -77,7 +77,7 @@ type VersionsResponse struct {
 type Package struct {
 	ID             string   `json:"id"`
 	Name           string   `json:"name"`
-	Kind           string   `json:"kind"`
+	Kind           string   `json:"kind_key"`
 	IsPrivate      bool     `json:"private"`
 	LatestVersion  Version  `json:"latest_version"`
 	ReleaseVersion *Version `json:"release_version"`

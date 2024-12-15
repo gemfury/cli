@@ -12,7 +12,7 @@ import (
 var packagesResponses = []string{`[{
 	"id": "pkg_a1b2c3",
 	"name": "pkg-ruby",
-	"kind": "ruby",
+	"kind_key": "ruby",
 	"private": false,
 	"release_version": {
 		"version": "1.1.1"
@@ -20,7 +20,7 @@ var packagesResponses = []string{`[{
 }]`, `[{
 	"id": "pkg_z1y2x3",
 	"name": "pkg-js",
-	"kind": "js",
+	"kind_key": "js",
 	"private": true
 }]`}
 
@@ -74,7 +74,7 @@ var versionsResponses = []string{`[{
 	},
 	"package": {
 		"id": "pkg_x9y8z7",
-		"kind": "js"
+		"kind_key": "js"
 	}
 }]`, `[{
 	"id": "ver_z1y2x3",
@@ -83,7 +83,7 @@ var versionsResponses = []string{`[{
 	"filename": "foo-3.2.1.tgz",
 	"package": {
 		"id": "pkg_x9y8z7",
-		"kind": "js"
+		"kind_key": "js"
 	}
 }]`}
 
