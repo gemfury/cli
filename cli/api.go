@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/cenkalti/backoff/v4"
+	"github.com/cenkalti/backoff/v5"
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/pkg/terminal"
@@ -126,30 +126,26 @@ func browserLogin(cmd *cobra.Command) (*api.LoginResponse, error) {
 	onDone := terminal.SpinIfTerminal(term, " Waiting ...")
 	defer onDone()
 
-	// LoginGet will timeout, so we retry until a time limit.
-	// We do constant backoff with elapsed time limit that
-	// is shorter than the expiry of all the JWT tokens.
-	constantBackoff := backoff.NewExponentialBackOff(
-		backoff.WithMaxElapsedTime(3*time.Minute),
-		backoff.WithMultiplier(1.0),
-	)
-
-	// Repeatedly hit LoginGet API until results
-	var resp *api.LoginGetResponse
-	err = backoff.Retry(func() error {
-		resp, err = c.LoginGet(cc, createResp)
+	// LoginGet API will block & timeout, so we poll until a time limit.
+	resp, err := backoff.Retry(cc, func() (*api.LoginGetResponse, error) {
+		resp, err := c.LoginGet(cc, createResp)
 		if !errors.Is(err, api.ErrTimeout) && !errors.Is(err, api.ErrNotFound) {
 			err = backoff.Permanent(err) // Retry only on timeout or not-found
 		}
-		return err
-	}, backoff.WithContext(constantBackoff, cc))
+		return resp, err
+	},
+		// We retry with constant backoff waiting for user to approve login.
+		// Max elapsed time is shorter than the expiry of all the JWT tokens.
+		backoff.WithBackOff(backoff.NewConstantBackOff(500*time.Millisecond)),
+		backoff.WithMaxElapsedTime(3*time.Minute),
+	)
 
 	if resp == nil {
 		return nil, err
 	}
 
 	if resp.Error != "" {
-		err = fmt.Errorf(resp.Error)
+		err = errors.New(resp.Error)
 	} else if errors.Is(err, api.ErrNotFound) {
 		err = api.ErrTimeout
 	}
