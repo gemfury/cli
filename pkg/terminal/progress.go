@@ -46,5 +46,5 @@ func (np noProgress) NewProxyReader(r io.Reader) io.Reader {
 }
 
 func (np noProgress) Finish() {
-	return
+	// noop
 }

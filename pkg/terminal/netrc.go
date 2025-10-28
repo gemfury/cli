@@ -5,7 +5,6 @@ import (
 
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -89,7 +88,7 @@ func netrcUpdate(update func(net *netrc.Netrc)) error {
 	// Write new .netrc file
 	out, _ := net.MarshalText()
 	out = bytes.TrimSpace(out)
-	return ioutil.WriteFile(path, out, 0600)
+	return os.WriteFile(path, out, 0600)
 }
 
 func netrcPath() (string, error) {

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -100,7 +99,7 @@ func (c *Client) prepareJSONBody(req *request, data interface{}) error {
 
 	req.ContentLength = int64(len(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Body = ioutil.NopCloser(bytes.NewReader(body))
+	req.Body = io.NopCloser(bytes.NewReader(body))
 	return nil
 }
 

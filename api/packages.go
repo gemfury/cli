@@ -106,7 +106,7 @@ type Version struct {
 	CreatedAt   time.Time        `json:"created_at"`
 	DownloadURL string           `json:"download_url"`
 	Filename    string           `json:"filename"`
-	Digests     VersionDigests   `json:"digests`
+	Digests     VersionDigests   `json:"digests"`
 }
 
 // VersionDigests represents Version's digest field
