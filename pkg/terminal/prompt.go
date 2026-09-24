@@ -7,7 +7,6 @@ import (
 
 	"errors"
 	"io"
-	"os"
 	"strings"
 	"time"
 )
@@ -21,13 +20,27 @@ func PromptConfirm(t Terminal, label string) (bool, error) {
 	return err == nil, err
 }
 
-// PromptAnyKeyOrQuit reads either "q" or any key from Stdin
+// Control bytes that mean "quit" at a single-key prompt. The terminal is in
+// raw mode while reading, so Ctrl-C arrives as a byte rather than a signal.
+const (
+	keyCtrlC = 0x03
+	keyCtrlD = 0x04
+	keyEsc   = 0x1b
+)
+
+// PromptAnyKeyOrQuit reads a single key from Stdin. It returns
+// promptui.ErrAbort when the user backs out with "q", Esc, Ctrl-C, or Ctrl-D.
 func PromptAnyKeyOrQuit(t Terminal, prompt string) error {
-	if ch, err := stdinRawCharPrompt(t, prompt); err != nil {
+	ch, err := stdinRawCharPrompt(t, prompt)
+	if err != nil {
 		return err
-	} else if ch == 113 || ch == 81 { // "Q" or "q"
+	}
+
+	switch ch {
+	case 'q', 'Q', keyCtrlC, keyCtrlD, keyEsc:
 		return promptui.ErrAbort
 	}
+
 	return nil
 }
 
@@ -35,8 +48,9 @@ func PromptAnyKeyOrQuit(t Terminal, prompt string) error {
 func stdinRawCharPrompt(t Terminal, prompt string) (byte, error) {
 	stdin := t.IOIn()
 
-	// Enter raw mode, for actual STDIN
-	if stdin == os.Stdin {
+	// Enter raw mode to read a single key without waiting for Enter.
+	// Only a terminal can do this; a pipe or file is read as-is.
+	if isTerminal(stdin) {
 		rm := new(readline.RawMode)
 		if err := rm.Enter(); err != nil {
 			return 0, err
@@ -47,9 +61,12 @@ func stdinRawCharPrompt(t Terminal, prompt string) (byte, error) {
 	// Display initial prompt
 	t.Printf("%s", prompt)
 
-	// Read a single byte from stdin
+	// Read a single byte from stdin. A closed stdin cannot answer,
+	// which is the same as declining.
 	var b [1]byte
-	if n, err := stdin.Read(b[:]); err != nil {
+	if n, err := stdin.Read(b[:]); errors.Is(err, io.EOF) {
+		return 0, promptui.ErrAbort
+	} else if err != nil {
 		return 0, err
 	} else if n == 0 {
 		return 0, io.ErrNoProgress
@@ -62,12 +79,12 @@ func stdinRawCharPrompt(t Terminal, prompt string) (byte, error) {
 	return b[0], nil
 }
 
-// SpinIfTerminal shows a spinner on stderr, when it is a TTY, until the
-// returned func is called. FinalMSG erases the spinner line on stop.
+// SpinIfTerminal shows a spinner on the error stream until the returned
+// func is called. Like StartProgress, it does nothing on a non-terminal.
 func SpinIfTerminal(t Terminal, suffix string) func() {
-	ioErr := t.IOErr() // can be real os.Stderr or placeholder for testing
-	if osErr := os.Stderr; ioErr != osErr || !readline.IsTerminal(int(osErr.Fd())) {
-		return func() {} // IOErr is not a TTY terminal
+	ioErr := t.IOErr()
+	if !isTerminal(ioErr) {
+		return func() {}
 	}
 	spin := spinner.New(spinner.CharSets[11], 100*time.Millisecond, spinner.WithWriter(ioErr))
 	spin.FinalMSG = "\r" + strings.Repeat(" ", 20) + "\r" // Erases previous string
