@@ -4,7 +4,6 @@ import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/pkg/terminal"
-	"github.com/hashicorp/go-multierror"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 
@@ -53,36 +52,36 @@ func downloadVersions(cmd *cobra.Command, args []string) error {
 	}
 
 	cc := cmd.Context()
+	term := ctx.Terminal(cc)
 	c, err := newAPIClient(cc)
 	if err != nil {
 		return err
 	}
 
-	var multiErr *multierror.Error
+	fails := newFailures(term, len(args), "downloads")
 	for _, arg := range args {
-		var pkg, ver string
-
-		if at := strings.LastIndex(arg, "@"); at > 0 {
-			pkg, ver = arg[0:at], arg[at+1:]
-		} else {
-			err := fmt.Errorf("Argument format: PACKAGE@VERSION")
-			multiErr = multierror.Append(multiErr, err)
-			continue
-		}
-
-		v, err := c.Version(cc, pkg, ver)
-		if err != nil {
-			multiErr = multierror.Append(multiErr, err)
-			continue
-		}
-
-		filename := strings.ReplaceAll(v.Filename, string(filepath.Separator), "_")
-		if err := downloadVersion(cc, c, v, ".", filename); err != nil {
-			multiErr = multierror.Append(multiErr, err)
-		}
+		fails.add("downloading", arg, downloadArg(cc, c, arg))
 	}
 
-	return multiErr.Unwrap()
+	return fails.err()
+}
+
+// downloadArg resolves a PACKAGE@VERSION argument and
+// downloads its file into the current directory
+func downloadArg(cc context.Context, c *api.Client, arg string) error {
+	at := strings.LastIndex(arg, "@")
+	if at <= 0 {
+		return fmt.Errorf("Argument format: PACKAGE@VERSION")
+	}
+	pkg, ver := arg[0:at], arg[at+1:]
+
+	v, err := c.Version(cc, pkg, ver)
+	if err != nil {
+		return err
+	}
+
+	filename := strings.ReplaceAll(v.Filename, string(filepath.Separator), "_")
+	return downloadVersion(cc, c, v, ".", filename)
 }
 
 // NewCmdBackup creates a Cobra command for "backup"

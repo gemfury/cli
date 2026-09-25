@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/cenkalti/backoff/v5"
+	"github.com/cenkalti/backoff/v7"
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/pkg/terminal"

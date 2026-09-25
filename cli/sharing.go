@@ -3,11 +3,9 @@ package cli
 import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
-	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
 
 	"fmt"
-	"log"
 	"text/tabwriter"
 )
 
@@ -84,20 +82,17 @@ func NewCmdSharingAdd() *cobra.Command {
 				return err
 			}
 
-			var multiErr *multierror.Error
+			fails := newFailures(term, len(args), "invitations")
 			for _, name := range args {
-				err := c.AddCollaborator(cc, name, roleFlag)
-
-				if err != nil {
-					multiErr = multierror.Append(multiErr, err)
-					log.Printf("Problem adding %q: %s\n", name, err)
+				if err := c.AddCollaborator(cc, name, roleFlag); err != nil {
+					fails.add("adding", name, err)
 					continue
 				}
 
 				term.Printf("Invited %q as a collaborator\n", name)
 			}
 
-			return multiErr.Unwrap()
+			return fails.err()
 		},
 	}
 
@@ -107,7 +102,7 @@ func NewCmdSharingAdd() *cobra.Command {
 	return addCmd
 }
 
-// NewCmdSharingRemove generates the Cobra command for "sharing:add"
+// NewCmdSharingRemove generates the Cobra command for "sharing:remove"
 func NewCmdSharingRemove() *cobra.Command {
 	rmCmd := &cobra.Command{
 		Use:   "remove EMAIL",
@@ -124,20 +119,17 @@ func NewCmdSharingRemove() *cobra.Command {
 				return err
 			}
 
-			var multiErr *multierror.Error
+			fails := newFailures(term, len(args), "removals")
 			for _, name := range args {
-				err := c.RemoveCollaborator(cc, name)
-
-				if err != nil {
-					multiErr = multierror.Append(multiErr, err)
-					log.Printf("Problem removing %q: %s\n", name, err)
+				if err := c.RemoveCollaborator(cc, name); err != nil {
+					fails.add("removing", name, err)
 					continue
 				}
 
 				term.Printf("Removed %q as a collaborator\n", name)
 			}
 
-			return multiErr.Unwrap()
+			return fails.err()
 		},
 	}
 

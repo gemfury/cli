@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -121,6 +122,30 @@ func TestPushCommandForbidden(t *testing.T) {
 		t.Errorf("Non-empty error: \n%s", eb)
 	}
 
+}
+
+// One missing file among two: the other is still uploaded, each file gets
+// its status line on stdout, and nothing is repeated on stderr
+func TestPushCommandPartialFailure(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	server := testutil.APIServer(t, "POST", "/uploads", pushResponse, 200)
+	defer server.Close()
+
+	cc := testContext(term, auth, server)
+	missing := filepath.Join(t.TempDir(), "missing.gem")
+	err := runCommand(cc, []string{"push", "--quiet", samplePackagePath(), missing})
+	expectSummaryError(t, err, os.ErrNotExist, "1 of 2 uploads failed")
+
+	exp := "Uploading sample.txt - done\nUploading missing.gem - file not found\n"
+	if outStr := string(term.OutBytes()); outStr != exp {
+		t.Errorf("Output should be %q, got %q", exp, outStr)
+	}
+
+	if eb := term.ErrBytes(); len(eb) > 0 {
+		t.Errorf("Non-empty error: \n%s", eb)
+	}
 }
 
 func samplePackagePath() string {

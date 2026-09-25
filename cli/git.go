@@ -137,7 +137,7 @@ func NewCmdGitRebuild() *cobra.Command {
 			}
 			msg = msg + " ...\n"
 
-			term.Printf(msg)
+			term.Printf("%s", msg)
 			err = c.GitRebuild(cc, term.IOOut(), repo, rev)
 			if err != nil {
 				return err

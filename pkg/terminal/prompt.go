@@ -45,7 +45,7 @@ func stdinRawCharPrompt(t Terminal, prompt string) (byte, error) {
 	}
 
 	// Display initial prompt
-	t.Printf(prompt)
+	t.Printf("%s", prompt)
 
 	// Read a single byte from stdin
 	var b [1]byte

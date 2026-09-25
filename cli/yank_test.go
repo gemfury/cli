@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/cli"
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/internal/testutil"
@@ -114,11 +115,15 @@ func TestYankCommandMultiPackage(t *testing.T) {
 	// Expected successful output
 	exp := "Removed \"foo-1.2.3.tgz\"\nRemoved \"foo-3.2.1.tgz\"\n"
 
-	// Failure for multiple packages without version
-	err := runCommandNoErr(cc, []string{"yank", "foo", "bar"})
-	if err == nil || !strings.Contains(err.Error(), "Invalid package/version") {
-		t.Errorf("Expected invalid error, got %q", err)
+	// Failure for multiple packages without version: each is reported, then summarized
+	err := runCommand(cc, []string{"yank", "foo", "bar"})
+	if summary := "2 of 2 lookups failed"; err == nil || err.Error() != summary {
+		t.Errorf("Expected %q, got %v", summary, err)
 	}
+	expectProblems(t, term,
+		"Problem looking up \"foo\": Invalid package/version specified\n",
+		"Problem looking up \"bar\": Invalid package/version specified\n",
+	)
 
 	// Failure for multiple packages with version flag
 	err = runCommandNoErr(cc, []string{"yank", "foo", "bar", "-v", "0.0.1"})
@@ -166,4 +171,31 @@ func TestYankCommandForbidden(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/versions", "", 403)
 	testCommandForbiddenResponse(t, []string{"yank", "foo", "-v", "0.0.1"}, server)
 	server.Close()
+}
+
+// One of two matched versions cannot be removed: the other still is
+func TestYankCommandPartialRemovalFailure(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/versions", func(w http.ResponseWriter, r *http.Request) {
+			testutil.APIPaginatedResponse(t, w, r, versionsResponses, 200)
+		})
+		mux.HandleFunc("/packages/{pid}/versions/{vid}", func(w http.ResponseWriter, r *http.Request) {
+			if r.PathValue("vid") == "ver_z1y2x3" {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.Write([]byte("{}"))
+		})
+	})
+	defer server.Close()
+
+	cc := testContext(term, auth, server)
+	err := runCommand(cc, []string{"yank", "foo@0.0.1", "--force"})
+	expectSummaryError(t, err, api.ErrNotFound, "1 of 2 removals failed")
+
+	expectOutputLines(t, term, "Removed ", "Removed \"foo-1.2.3.tgz\"\n")
+	expectProblems(t, term, "Problem removing \"foo-3.2.1.tgz\": Doesn't look like this exists\n")
 }

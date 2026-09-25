@@ -1,10 +1,12 @@
 package cli_test
 
 import (
+	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/cli"
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/internal/testutil"
 	"github.com/gemfury/cli/pkg/terminal"
+
 	"net/http"
 	"strings"
 	"testing"
@@ -135,6 +137,33 @@ func TestSharingAddForbidden(t *testing.T) {
 	args := []string{"sharing", "add", "added@example.com"}
 	testCommandForbiddenResponse(t, args, server)
 	server.Close()
+}
+
+// One of three invitations fails: the other two still go through
+func TestSharingAddCommandPartialFailure(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/collaborators/", func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/nobody@example.com") {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		})
+	})
+	defer server.Close()
+
+	cc := testContext(term, auth, server)
+	args := []string{"sharing", "add", "ok@example.com", "nobody@example.com", "fine@example.com"}
+	expectSummaryError(t, runCommand(cc, args), api.ErrNotFound, "1 of 3 invitations failed")
+
+	expectOutputLines(t, term, "Invited ",
+		"Invited \"ok@example.com\" as a collaborator\n",
+		"Invited \"fine@example.com\" as a collaborator\n",
+	)
+	expectProblems(t, term, "Problem adding \"nobody@example.com\": Doesn't look like this exists\n")
 }
 
 // ==== sharing remove ====

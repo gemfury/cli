@@ -9,6 +9,7 @@ import (
 
 type TestTerm interface {
 	ErrBytes() []byte
+	OutBytes() []byte
 	Terminal
 }
 

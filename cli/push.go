@@ -3,7 +3,6 @@ package cli
 import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
-	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
 
 	"errors"
@@ -34,7 +33,7 @@ func NewCmdPush() *cobra.Command {
 			}
 
 			// Upload each file and collect errors
-			var multiErr *multierror.Error
+			fails := newFailures(term, len(args), "uploads")
 			for _, path := range args {
 				name := filepath.Base(path)
 				prefix := fmt.Sprintf("Uploading %s ", name)
@@ -49,7 +48,7 @@ func NewCmdPush() *cobra.Command {
 					// Prepare progress bar
 					var reader io.Reader = file
 					if noProgress {
-						term.Printf(prefix)
+						term.Printf("%s", prefix)
 						prefix = ""
 					} else {
 						stat, _ := file.Stat()
@@ -58,17 +57,16 @@ func NewCmdPush() *cobra.Command {
 						defer bar.Finish()
 					}
 
-					err = c.PushPkg(cc, name, isPublic, reader)
-					return err
+					return c.PushPkg(cc, name, isPublic, reader)
 				}()
-
-				if err != nil {
-					multiErr = multierror.Append(multiErr, err)
-				}
 
 				if err == nil {
 					term.Printf("%s- done\n", prefix)
-				} else if os.IsNotExist(err) {
+					continue
+				}
+
+				fails.record(err) // Reported by the status line below
+				if os.IsNotExist(err) {
 					term.Printf("%s- file not found\n", prefix)
 				} else if errors.Is(err, api.ErrUnauthorized) {
 					term.Printf("%s- unauthorized\n", prefix)
@@ -81,15 +79,16 @@ func NewCmdPush() *cobra.Command {
 				}
 			}
 
-			if multiErr != nil {
+			// Per-file status is already on stdout, so Cobra's own error
+			// and usage output would only add noise. The error is still
+			// returned: main prints it and sets the exit status.
+			err = fails.err()
+			if err != nil {
 				cmd.SilenceUsage = true
 				cmd.SilenceErrors = true
-				multiErr.ErrorFormat = func([]error) string {
-					return "There was a problem uploading at least 1 package"
-				}
 			}
 
-			return multiErr.Unwrap()
+			return err
 		},
 	}
 

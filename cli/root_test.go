@@ -68,11 +68,8 @@ func runCommandNoErr(cc context.Context, args []string) error {
 	return nil
 }
 
-// We first test with manual (prompt) login, and then test with "--api-token" flag
-func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Server, opts ...testOption) {
-	auth := terminal.TestAuther("", "", nil)
-	term := terminal.NewForTest()
-
+// testContext builds a command context with both API endpoints pointed at server
+func testContext(term terminal.Terminal, auth terminal.Auther, server *httptest.Server, opts ...testOption) context.Context {
 	cc := cli.TestContext(term, auth)
 	for _, opt := range opts {
 		cc = opt(cc)
@@ -81,6 +78,46 @@ func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Serv
 	flags := ctx.GlobalFlags(cc)
 	flags.PushEndpoint = server.URL
 	flags.Endpoint = server.URL
+	return cc
+}
+
+// expectSummaryError asserts the error a multi-item command returns when
+// some items failed: it reads as summary and still wraps cause
+func expectSummaryError(t *testing.T, err, cause error, summary string) {
+	t.Helper()
+	if !errors.Is(err, cause) {
+		t.Fatalf("Expected %v within error, got: %v", cause, err)
+	}
+	if err.Error() != summary {
+		t.Errorf("Expected summary %q, got %q", summary, err)
+	}
+}
+
+// expectProblems asserts that stderr begins with the given per-item lines, in order
+func expectProblems(t *testing.T, term terminal.TestTerm, lines ...string) {
+	t.Helper()
+	errStr := string(term.ErrBytes())
+	if exp := strings.Join(lines, ""); !strings.HasPrefix(errStr, exp) {
+		t.Errorf("Error output should start with %q, got %q", exp, errStr)
+	}
+}
+
+// expectOutputLines asserts that stdout holds the given adjacent lines and no
+// other occurrence of marker. Stdout is not matched exactly because Cobra
+// appends its usage text to it when a command fails.
+func expectOutputLines(t *testing.T, term terminal.TestTerm, marker string, lines ...string) {
+	t.Helper()
+	out := string(term.OutBytes())
+	if exp := strings.Join(lines, ""); !strings.Contains(out, exp) || strings.Count(out, marker) != len(lines) {
+		t.Errorf("Output should contain exactly %q, got %q", exp, out)
+	}
+}
+
+// We first test with manual (prompt) login, and then test with "--api-token" flag
+func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Server, opts ...testOption) {
+	auth := terminal.TestAuther("", "", nil)
+	term := terminal.NewForTest()
+	cc := testContext(term, auth, server, opts...)
 
 	// Prepare for browser login prompt
 	term.InWrite([]byte("!"))
@@ -97,12 +134,10 @@ func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Serv
 		t.Errorf("Expected pass %q, got %q", exp, p)
 	}
 
-	// Testing with "--api-token" should skip calling Auth() on TestAuther
+	// Testing with "--api-token" should skip calling Auth() on TestAuther.
+	// The context options only shape the logged-out run above.
 	auth = terminal.TestAuther("", "", fmt.Errorf("TestAuther should not be called"))
-	cc = cli.TestContext(term, auth)
-	flags = ctx.GlobalFlags(cc)
-	flags.PushEndpoint = server.URL
-	flags.Endpoint = server.URL
+	cc = testContext(term, auth, server)
 
 	args = append(args, "--api-token", "abc123")
 	if err := runCommand(cc, args); err != nil {
@@ -113,15 +148,7 @@ func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Serv
 func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.Server, opts ...testOption) {
 	auth := terminal.TestAuther("user", "abc123", nil)
 	term := terminal.NewForTest()
-
-	cc := cli.TestContext(term, auth)
-	for _, opt := range opts {
-		cc = opt(cc)
-	}
-
-	flags := ctx.GlobalFlags(cc)
-	flags.PushEndpoint = server.URL
-	flags.Endpoint = server.URL
+	cc := testContext(term, auth, server, opts...)
 
 	err := runCommand(cc, args)
 	if !errors.Is(err, api.ErrForbidden) {

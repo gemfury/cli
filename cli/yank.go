@@ -4,7 +4,6 @@ import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/pkg/terminal"
-	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
 
 	"context"
@@ -37,29 +36,19 @@ func NewCmdYank() *cobra.Command {
 				return err
 			}
 
+			// Resolve every argument before removing anything
 			versions := make([]*api.Version, 0, len(args))
-			var multiErr *multierror.Error
-			for _, pkg := range args {
-				var ver string = ""
-
-				if versionFlag != "" {
-					ver = versionFlag
-				} else if at := strings.LastIndex(pkg, "@"); at > 0 {
-					pkg, ver = pkg[0:at], pkg[at+1:]
-				}
-
-				if pkg == "" || ver == "" {
-					err := fmt.Errorf("Invalid package/version specified")
-					multiErr = multierror.Append(multiErr, err)
+			lookups := newFailures(term, len(args), "lookups")
+			for _, arg := range args {
+				pkgVersions, err := lookupVersions(cc, c, arg, versionFlag)
+				if err != nil {
+					lookups.add("looking up", arg, err)
 					continue
 				}
-
-				pkgVersions, err := filterVersions(cc, c, pkg, ver)
 				versions = append(versions, pkgVersions...)
-				multiErr = multierror.Append(multiErr, err)
 			}
 
-			if err := multiErr.Unwrap(); err != nil {
+			if err := lookups.err(); err != nil {
 				return err
 			} else if len(versions) == 0 {
 				term.Printf("No matching versions found\n")
@@ -74,16 +63,16 @@ func NewCmdYank() *cobra.Command {
 				}
 			}
 
+			removals := newFailures(term, len(versions), "removals")
 			for _, v := range versions {
-				err = c.Yank(cc, v.Package.ID, v.ID)
-				if err != nil {
-					multiErr = multierror.Append(multiErr, err)
+				if err := c.Yank(cc, v.Package.ID, v.ID); err != nil {
+					removals.add("removing", v.Filename, err)
 					continue
 				}
 				term.Printf("Removed %q\n", v.Filename)
 			}
 
-			return multiErr.Unwrap()
+			return removals.err()
 		},
 	}
 
@@ -92,6 +81,22 @@ func NewCmdYank() *cobra.Command {
 	yankCmd.Flags().StringVarP(&versionFlag, "version", "v", "", "Version")
 
 	return yankCmd
+}
+
+// lookupVersions resolves one yank argument to its versions. The argument
+// is PACKAGE@VERSION, or a bare package name when the version comes from
+// the --version flag.
+func lookupVersions(cc context.Context, c *api.Client, arg, versionFlag string) ([]*api.Version, error) {
+	pkg, ver := arg, versionFlag
+	if at := strings.LastIndex(arg, "@"); versionFlag == "" && at > 0 {
+		pkg, ver = arg[0:at], arg[at+1:]
+	}
+
+	if pkg == "" || ver == "" {
+		return nil, fmt.Errorf("Invalid package/version specified")
+	}
+
+	return filterVersions(cc, c, pkg, ver)
 }
 
 func filterVersions(cc context.Context, c *api.Client, pkg, ver string) ([]*api.Version, error) {
