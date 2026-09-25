@@ -13,6 +13,7 @@ func NewCmdWhoAmI() *cobra.Command {
 	whoCmd := &cobra.Command{
 		Use:   "whoami",
 		Short: "Show current account",
+		Args:  noArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resp, err := whoAMI(cmd.Context())
 			if err != nil {

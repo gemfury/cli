@@ -2,9 +2,51 @@ package cli
 
 import (
 	"github.com/gemfury/cli/pkg/terminal"
+	"github.com/spf13/cobra"
 
+	"errors"
 	"fmt"
 )
+
+// usageError is a mistake in command-line arguments or flags.
+// The command's usage text is printed alongside these errors.
+type usageError struct {
+	msg string
+}
+
+func (e *usageError) Error() string {
+	return e.msg
+}
+
+// usageErrorf creates a usageError with a formatted message
+func usageErrorf(format string, a ...interface{}) error {
+	return &usageError{msg: fmt.Sprintf(format, a...)}
+}
+
+// IsUsageError reports whether err (or any error it wraps) is a usageError
+func IsUsageError(err error) bool {
+	var ue *usageError
+	return errors.As(err, &ue)
+}
+
+// usageArgs wraps a Cobra argument check so that its failure is a usage
+// error reading msg. Cobra runs these before authentication.
+func usageArgs(check cobra.PositionalArgs, msg string) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if check(cmd, args) != nil {
+			return &usageError{msg: msg}
+		}
+		return nil
+	}
+}
+
+// noArgs rejects any positional argument as a usage error
+func noArgs(cmd *cobra.Command, args []string) error {
+	if err := cobra.NoArgs(cmd, args); err != nil {
+		return usageErrorf("%s", err)
+	}
+	return nil
+}
 
 // failures collects what went wrong in a command that processes several
 // items (push, yank, sharing add, ...) and keeps going after one fails.

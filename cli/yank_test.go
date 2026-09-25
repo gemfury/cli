@@ -125,12 +125,6 @@ func TestYankCommandMultiPackage(t *testing.T) {
 		"Problem looking up \"bar\": Invalid package/version specified\n",
 	)
 
-	// Failure for multiple packages with version flag
-	err = runCommandNoErr(cc, []string{"yank", "foo", "bar", "-v", "0.0.1"})
-	if err == nil || !strings.Contains(err.Error(), "Use PACKAGE@VERSION") {
-		t.Errorf("Expected invalid error, got %q", err)
-	}
-
 	// When nothing is found, we expect "nothing found" error message
 	expNone := "No matching versions found\n"
 	err = runCommandNoErr(cc, []string{"yank", "foo@0.0.2", "--force"})

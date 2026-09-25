@@ -62,7 +62,8 @@ func stdinRawCharPrompt(t Terminal, prompt string) (byte, error) {
 	return b[0], nil
 }
 
-// IsTerminal true if IOOut is terminal Stdout
+// SpinIfTerminal shows a spinner on stderr, when it is a TTY, until the
+// returned func is called. FinalMSG erases the spinner line on stop.
 func SpinIfTerminal(t Terminal, suffix string) func() {
 	ioErr := t.IOErr() // can be real os.Stderr or placeholder for testing
 	if osErr := os.Stderr; ioErr != osErr || !readline.IsTerminal(int(osErr.Fd())) {
@@ -72,8 +73,5 @@ func SpinIfTerminal(t Terminal, suffix string) func() {
 	spin.FinalMSG = "\r" + strings.Repeat(" ", 20) + "\r" // Erases previous string
 	spin.Suffix = suffix
 	spin.Start()
-	return func() {
-		spin.Stop()
-		t.Printf("\r")
-	}
+	return spin.Stop
 }

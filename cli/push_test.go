@@ -103,29 +103,18 @@ func TestPushCommandForbidden(t *testing.T) {
 	server := testutil.APIServer(t, "POST", "/uploads", "[]", 403)
 	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
-	flags := ctx.GlobalFlags(cc)
-	flags.PushEndpoint = server.URL
-	flags.Endpoint = server.URL
-
+	cc := testContext(term, auth, server)
 	args := []string{"push", samplePackagePath()}
 	if err := runCommand(cc, args); !errors.Is(err, api.ErrForbidden) {
 		t.Errorf("Command not forbidden, error: %s", err)
 	}
 
-	exp := "Uploading sample.txt - no permission\n"
-	if errStr := string(term.OutBytes()); errStr != exp {
-		t.Errorf("Output should be %q, got %q", exp, errStr)
-	}
-
-	if eb := term.ErrBytes(); len(eb) > 0 {
-		t.Errorf("Non-empty error: \n%s", eb)
-	}
-
+	// Status line on stdout, only the error on stderr
+	expectOutput(t, term, "Uploading sample.txt - no permission\n", "Error: You're not allowed to do this\n")
 }
 
 // One missing file among two: the other is still uploaded, each file gets
-// its status line on stdout, and nothing is repeated on stderr
+// its status line on stdout, and stderr carries only the summary
 func TestPushCommandPartialFailure(t *testing.T) {
 	auth := terminal.TestAuther("user", "abc123", nil)
 	term := terminal.NewForTest()
@@ -138,14 +127,9 @@ func TestPushCommandPartialFailure(t *testing.T) {
 	err := runCommand(cc, []string{"push", "--quiet", samplePackagePath(), missing})
 	expectSummaryError(t, err, os.ErrNotExist, "1 of 2 uploads failed")
 
-	exp := "Uploading sample.txt - done\nUploading missing.gem - file not found\n"
-	if outStr := string(term.OutBytes()); outStr != exp {
-		t.Errorf("Output should be %q, got %q", exp, outStr)
-	}
-
-	if eb := term.ErrBytes(); len(eb) > 0 {
-		t.Errorf("Non-empty error: \n%s", eb)
-	}
+	expectOutput(t, term,
+		"Uploading sample.txt - done\nUploading missing.gem - file not found\n",
+		"Error: 1 of 2 uploads failed\n")
 }
 
 func samplePackagePath() string {

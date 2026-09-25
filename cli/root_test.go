@@ -6,10 +6,12 @@ import (
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/internal/testutil"
 	"github.com/gemfury/cli/pkg/terminal"
+	"github.com/spf13/cobra"
 
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"regexp"
@@ -17,9 +19,8 @@ import (
 	"testing"
 )
 
-var (
-	usageRegexp = regexp.MustCompilePOSIX("^Usage:$")
-)
+// Neither usage text nor "nothing found" belongs in a failed command's stdout
+var failedOutRegexp = regexp.MustCompile(`(?m)^(Usage:|No .* found)`)
 
 // Top-level testing initializer
 func TestMain(m *testing.M) {
@@ -52,7 +53,7 @@ func TestRootCommand(t *testing.T) {
 func runCommand(cc context.Context, args []string) error {
 	cmd := cli.NewRootCommand(cc)
 	cmd.SetArgs(args)
-	return cmd.ExecuteContext(cc)
+	return cli.Execute(cc, cmd)
 }
 
 func runCommandNoErr(cc context.Context, args []string) error {
@@ -93,7 +94,7 @@ func expectSummaryError(t *testing.T, err, cause error, summary string) {
 	}
 }
 
-// expectProblems asserts that stderr begins with the given per-item lines, in order
+// expectProblems asserts that stderr begins with the given lines, in order
 func expectProblems(t *testing.T, term terminal.TestTerm, lines ...string) {
 	t.Helper()
 	errStr := string(term.ErrBytes())
@@ -102,9 +103,20 @@ func expectProblems(t *testing.T, term terminal.TestTerm, lines ...string) {
 	}
 }
 
+// expectOutput asserts exactly what went to stdout and to stderr
+func expectOutput(t *testing.T, term terminal.TestTerm, stdout, stderr string) {
+	t.Helper()
+	if out := string(term.OutBytes()); out != stdout {
+		t.Errorf("Output should be %q, got %q", stdout, out)
+	}
+	if errOut := string(term.ErrBytes()); errOut != stderr {
+		t.Errorf("Error output should be %q, got %q", stderr, errOut)
+	}
+}
+
 // expectOutputLines asserts that stdout holds the given adjacent lines and no
-// other occurrence of marker. Stdout is not matched exactly because Cobra
-// appends its usage text to it when a command fails.
+// other occurrence of marker. Stdout is not matched exactly because it may
+// also hold other progress or status lines.
 func expectOutputLines(t *testing.T, term terminal.TestTerm, marker string, lines ...string) {
 	t.Helper()
 	out := string(term.OutBytes())
@@ -155,14 +167,96 @@ func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.
 		t.Fatalf("Command error: %s", err)
 	}
 
+	// Error is reported exactly once, on stderr, without usage text
 	errStr := string(term.ErrBytes())
 	if exp := "Error: You're not allowed to do this\n"; errStr != exp {
 		t.Errorf("Error should be %q, got %q", exp, errStr)
 	}
 
-	if ob := term.OutBytes(); !usageRegexp.Match(ob) {
-		t.Errorf("Output isn't showing usage: \n%s", ob)
+	if ob := term.OutBytes(); failedOutRegexp.Match(ob) {
+		t.Errorf("Unexpected output for an API error: %q", ob)
 	}
+}
+
+// Wrong arguments or flags are usage errors, caught before authentication,
+// so a logged-out user is not sent to log in first
+func TestUsageErrorOutput(t *testing.T) {
+	cases := []struct {
+		args []string
+		msg  string
+	}{
+		{[]string{"versions", "one", "two"}, "Please specify exactly one package"},
+		{[]string{"push"}, "Please specify at least one package file"},
+		{[]string{"yank"}, "Please specify at least one package"},
+		{[]string{"yank", "foo", "bar", "-v", "0.0.1"}, "Use PACKAGE@VERSION for multiple yanks"},
+		{[]string{"beta", "download"}, "Please specify at least one PACKAGE@VERSION"},
+		{[]string{"beta", "backup"}, "Please specify exactly one destination directory"},
+		{[]string{"git", "rename", "repo"}, "Please specify a repository and its new name"},
+		{[]string{"git", "config", "get", "repo"}, "Please specify a repository and at least one key"},
+		{[]string{"git", "config", "set", "repo", "A=1", "B"}, "Argument has no value: B"},
+		{[]string{"git", "stack", "set", "repo"}, "Please specify a repository and a stack"},
+		{[]string{"sharing", "add"}, "Please specify at least one collaborator"},
+		{[]string{"sharing", "extra"}, `unknown command "extra" for "fury sharing"`},
+		{[]string{"whoami", "extra"}, `unknown command "extra" for "fury whoami"`},
+		{[]string{"packages", "--json"}, "unknown flag: --json"},
+	}
+
+	// Catch-all handler fails on any API call; it also displaces the
+	// default browser-login handler, so a login attempt fails too
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			t.Errorf("Unexpected API request: %s %s", r.Method, r.URL)
+		})
+	})
+	defer server.Close()
+
+	for _, tc := range cases {
+		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
+			auth := terminal.TestAuther("", "", nil)
+			term := terminal.NewForTest()
+			cc := testContext(term, auth, server)
+
+			err := runCommand(cc, tc.args)
+			if !cli.IsUsageError(err) {
+				t.Fatalf("Expected usage error, got: %v", err)
+			}
+
+			// Error and usage both go to stderr: the error once, then usage
+			expectProblems(t, term, "Error: "+tc.msg+"\n", "Usage:\n")
+
+			if ob := term.OutBytes(); len(ob) != 0 {
+				t.Errorf("Expected empty stdout, got %q", ob)
+			}
+		})
+	}
+}
+
+// Without Args, Cobra lets a subcommand silently ignore extra arguments
+func TestRunnableCommandsDeclareArgs(t *testing.T) {
+	cc := cli.TestContext(terminal.NewForTest(), terminal.TestAuther("", "", nil))
+
+	var check func(cmd *cobra.Command)
+	check = func(cmd *cobra.Command) {
+		if cmd.Runnable() && cmd.Args == nil {
+			t.Errorf("Command %q has no Args check", cmd.CommandPath())
+		}
+		for _, sub := range cmd.Commands() {
+			check(sub)
+		}
+	}
+	check(cli.NewRootCommand(cc))
+}
+
+func TestUnknownCommandOutput(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	cc := cli.TestContext(term, auth)
+	if err := runCommand(cc, []string{"nosuchcmd"}); err == nil {
+		t.Fatal("Expected error for unknown command")
+	}
+
+	expectOutput(t, term, "", "Error: unknown command \"nosuchcmd\" for \"fury\"\nRun 'fury --help' for usage.\n")
 }
 
 // Context altering options added to test commands

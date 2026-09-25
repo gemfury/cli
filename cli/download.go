@@ -38,19 +38,14 @@ func NewCmdBeta() *cobra.Command {
 // NewCmdDownload creates a Cobra command for "download"
 func NewCmdDownload() *cobra.Command {
 	return &cobra.Command{
-		Use:   "download PACKAGE@VERSION",
+		Use:   "download PACKAGE@VERSION...",
 		Short: "Download a package to the current directory",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return downloadVersions(cmd, args)
-		},
+		Args:  usageArgs(cobra.MinimumNArgs(1), "Please specify at least one PACKAGE@VERSION"),
+		RunE:  downloadVersions,
 	}
 }
 
 func downloadVersions(cmd *cobra.Command, args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("Please specify at least one version")
-	}
-
 	cc := cmd.Context()
 	term := ctx.Terminal(cc)
 	c, err := newAPIClient(cc)
@@ -91,6 +86,7 @@ func NewCmdBackup() *cobra.Command {
 	backupCmd := &cobra.Command{
 		Use:   "backup DIR",
 		Short: "Save all files to a directory",
+		Args:  usageArgs(cobra.ExactArgs(1), "Please specify exactly one destination directory"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return backupEverything(cmd, args, kindFlag)
 		},
@@ -103,10 +99,6 @@ func NewCmdBackup() *cobra.Command {
 }
 
 func backupEverything(cmd *cobra.Command, args []string, kindFlag string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("Please specify the destination")
-	}
-
 	// Verify destination directory
 	destDir := filepath.Clean(args[0])
 	if s, err := os.Stat(destDir); os.IsNotExist(err) {
@@ -159,8 +151,10 @@ func downloadVersion(cc context.Context, client *api.Client, v *api.Version, des
 	path := filepath.Clean(filepath.Join(destDir, subPath))
 	pkgDir := filepath.Dir(path)
 
-	// Status string template for inserting status emoji
-	statusFmt := fmt.Sprintf("%-16s%%s %s", v.ID, strings.TrimPrefix(subPath, slash))
+	// Status line with a slot for the status emoji
+	status := func(emoji string) string {
+		return fmt.Sprintf("%-16s%s %s", v.ID, emoji, strings.TrimPrefix(subPath, slash))
+	}
 
 	// Verify or create package directory
 	if s, err := os.Stat(pkgDir); os.IsNotExist(err) {
@@ -172,7 +166,7 @@ func downloadVersion(cc context.Context, client *api.Client, v *api.Version, des
 	}
 
 	// Check if file exists, and validate checksum
-	if err := backupCheckPath(term, v, path, statusFmt); errors.Is(err, backupSkip) {
+	if err := backupCheckPath(term, v, path, status); errors.Is(err, backupSkip) {
 		return nil // Checksum match => skip download
 	} else if err != nil {
 		return err
@@ -193,7 +187,7 @@ func downloadVersion(cc context.Context, client *api.Client, v *api.Version, des
 	defer body.Close()
 
 	// Wrap with status bar
-	bar := term.StartProgress(size, fmt.Sprintf(statusFmt+" ", "⌛"))
+	bar := term.StartProgress(size, status("⌛")+" ")
 	reader := bar.NewProxyReader(body)
 
 	// Download and write to disk
@@ -202,14 +196,14 @@ func downloadVersion(cc context.Context, client *api.Client, v *api.Version, des
 
 	// Status output
 	if err == nil {
-		term.Printf(statusFmt+"\n", "💾")
+		term.Println(status("💾"))
 	}
 
 	return err
 }
 
 // Validate checksum for file
-func backupCheckPath(term terminal.Terminal, v *api.Version, path, statusFmt string) error {
+func backupCheckPath(term terminal.Terminal, v *api.Version, path string, status func(string) string) error {
 	// Check if file exists, and validate checksum if it does
 	if s, err := os.Stat(path); os.IsNotExist(err) {
 		return nil
@@ -220,7 +214,7 @@ func backupCheckPath(term terminal.Terminal, v *api.Version, path, statusFmt str
 	}
 
 	if v == nil || v.Digests.SHA512 == "" {
-		term.Printf(statusFmt+" (WARNING: No checksum provided by API)\n", "❓")
+		term.Printf("%s (WARNING: No checksum provided by API)\n", status("❓"))
 		return backupSkip // API should always have digests (theoretically)
 	}
 
@@ -237,7 +231,7 @@ func backupCheckPath(term terminal.Terminal, v *api.Version, path, statusFmt str
 
 	sum := fmt.Sprintf("%x", hash.Sum(nil))
 	if exp := v.Digests.SHA512; exp != sum {
-		term.Printf(statusFmt+" (CHECKSUM MISMATCH)\n", "❌")
+		term.Printf("%s (CHECKSUM MISMATCH)\n", status("❌"))
 		prompt := promptui.Prompt{
 			Label:   "Do you want to delete and redownload? [y/N]",
 			Default: "N",
@@ -255,6 +249,6 @@ func backupCheckPath(term terminal.Terminal, v *api.Version, path, statusFmt str
 		return fmt.Errorf("Checksum failed")
 	}
 
-	term.Printf(statusFmt+"\n", "✅")
+	term.Println(status("✅"))
 	return backupSkip
 }

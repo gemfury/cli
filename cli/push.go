@@ -18,13 +18,10 @@ func NewCmdPush() *cobra.Command {
 	var isPublic bool
 
 	pushCmd := &cobra.Command{
-		Use:   "push PACKAGE",
+		Use:   "push FILE...",
 		Short: "Upload a new version of a package",
+		Args:  usageArgs(cobra.MinimumNArgs(1), "Please specify at least one package file"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return fmt.Errorf("Please specify at least one package")
-			}
-
 			cc := cmd.Context()
 			term := ctx.Terminal(cc)
 			c, err := newAPIClient(cc)
@@ -79,16 +76,8 @@ func NewCmdPush() *cobra.Command {
 				}
 			}
 
-			// Per-file status is already on stdout, so Cobra's own error
-			// and usage output would only add noise. The error is still
-			// returned: main prints it and sets the exit status.
-			err = fails.err()
-			if err != nil {
-				cmd.SilenceUsage = true
-				cmd.SilenceErrors = true
-			}
-
-			return err
+			// Per-file status is already on stdout; Execute reports the error
+			return fails.err()
 		},
 	}
 

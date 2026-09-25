@@ -179,10 +179,5 @@ func interactiveLogin(cmd *cobra.Command) (*api.LoginResponse, error) {
 	}
 
 	req := api.LoginRequest{Email: eResult, Password: pResult}
-	resp, err := c.Login(cc, &req)
-	if err == api.ErrUnauthorized {
-		cmd.SilenceErrors = true
-		cmd.SilenceUsage = true
-	}
-	return resp, err
+	return c.Login(cc, &req)
 }

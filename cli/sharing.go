@@ -9,11 +9,15 @@ import (
 	"text/tabwriter"
 )
 
+// collaboratorArgs is the Args check for commands taking EMAIL...
+var collaboratorArgs = usageArgs(cobra.MinimumNArgs(1), "Please specify at least one collaborator")
+
 // Root for sharing/collaboration subcommands
 func NewCmdSharingRoot() *cobra.Command {
 	gitCmd := &cobra.Command{
 		Use:   "sharing",
 		Short: "Collaboration commands",
+		Args:  noArgs,
 		RunE:  listMembers,
 	}
 
@@ -44,9 +48,11 @@ func listMembers(cmd *cobra.Command, args []string) error {
 		return resp.Pagination, nil
 	})
 
-	// Handle no packages
+	// Handle no members
 	if len(members) == 0 {
-		term.Println("No members found for this account")
+		if err == nil {
+			term.Println("No members found for this account")
+		}
 		return err
 	}
 
@@ -68,13 +74,10 @@ func NewCmdSharingAdd() *cobra.Command {
 	var roleFlag string
 
 	addCmd := &cobra.Command{
-		Use:   "add EMAIL",
+		Use:   "add EMAIL...",
 		Short: "Add a collaborator",
+		Args:  collaboratorArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return fmt.Errorf("Please specify at least one collaborator")
-			}
-
 			cc := cmd.Context()
 			term := ctx.Terminal(cc)
 			c, err := newAPIClient(cc)
@@ -105,13 +108,10 @@ func NewCmdSharingAdd() *cobra.Command {
 // NewCmdSharingRemove generates the Cobra command for "sharing:remove"
 func NewCmdSharingRemove() *cobra.Command {
 	rmCmd := &cobra.Command{
-		Use:   "remove EMAIL",
+		Use:   "remove EMAIL...",
 		Short: "Remove a collaborator",
+		Args:  collaboratorArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return fmt.Errorf("Please specify at least one collaborator")
-			}
-
 			cc := cmd.Context()
 			term := ctx.Terminal(cc)
 			c, err := newAPIClient(cc)
@@ -141,6 +141,7 @@ func NewCmdAccounts() *cobra.Command {
 	accountsCmd := &cobra.Command{
 		Use:   "accounts",
 		Short: "Listing of your collaborations",
+		Args:  noArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cc := cmd.Context()
 			term := ctx.Terminal(cc)
@@ -162,9 +163,11 @@ func NewCmdAccounts() *cobra.Command {
 				return resp.Pagination, nil
 			})
 
-			// Handle no packages
+			// Handle no collaborations
 			if len(members) == 0 {
-				term.Println("No collaborations found for this account")
+				if err == nil {
+					term.Println("No collaborations found for this account")
+				}
 				return err
 			}
 

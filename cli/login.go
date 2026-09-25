@@ -20,6 +20,7 @@ func NewCmdLogout() *cobra.Command {
 	logoutCmd := &cobra.Command{
 		Use:   "logout",
 		Short: "Clear CLI session credentials",
+		Args:  noArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cc := cmd.Context()
 			term := ctx.Terminal(cc)
@@ -78,6 +79,7 @@ func NewCmdLogin() *cobra.Command {
 	loginCmd := &cobra.Command{
 		Use:   "login",
 		Short: "Authenticate into Gemfury account",
+		Args:  noArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cc := cmd.Context()
 			auth := ctx.Auther(cc)

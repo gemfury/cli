@@ -9,6 +9,9 @@ import (
 	"strings"
 )
 
+// repoArg is the Args check for commands taking a single REPO
+var repoArg = usageArgs(cobra.ExactArgs(1), "Please specify exactly one repository")
+
 // Root for Git subcommands
 func NewCmdGitRoot() *cobra.Command {
 	gitCmd := &cobra.Command{
@@ -34,12 +37,9 @@ func NewCmdGitDestroy() *cobra.Command {
 		Use:     "destroy REPO",
 		Aliases: []string{"reset"},
 		Short:   "Remove Git repository",
+		Args:    repoArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			term := ctx.Terminal(cmd.Context())
-
-			if len(args) != 1 {
-				return fmt.Errorf("Please specify a repository")
-			}
 
 			// Reset-only when called as "git:reset"
 			if cmd.CalledAs() == "reset" {
@@ -78,12 +78,9 @@ func NewCmdGitRename() *cobra.Command {
 	renameCmd := &cobra.Command{
 		Use:   "rename REPO NEWNAME",
 		Short: "Rename a Git repository",
+		Args:  usageArgs(cobra.ExactArgs(2), "Please specify a repository and its new name"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			term := ctx.Terminal(cmd.Context())
-
-			if len(args) != 2 {
-				return fmt.Errorf("Please specify a repository")
-			}
 
 			cc := cmd.Context()
 			c, err := newAPIClient(cc)
@@ -111,12 +108,9 @@ func NewCmdGitRebuild() *cobra.Command {
 	rebuildCmd := &cobra.Command{
 		Use:   "rebuild REPO",
 		Short: "Run the builder on the repo",
+		Args:  repoArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			term := ctx.Terminal(cmd.Context())
-
-			if len(args) != 1 {
-				return fmt.Errorf("Please specify a repository")
-			}
 
 			cc := cmd.Context()
 			c, err := newAPIClient(cc)
@@ -158,6 +152,7 @@ func NewCmdGitList() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List repos in this account",
+		Args:  noArgs,
 		RunE:  listRepos,
 	}
 }
@@ -183,9 +178,11 @@ func listRepos(cmd *cobra.Command, args []string) error {
 		return resp.Pagination, nil
 	})
 
-	// Handle no packages
+	// Handle no repositories
 	if len(repos) == 0 {
-		term.Println("No Git repositories found in this account")
+		if err == nil {
+			term.Println("No Git repositories found in this account")
+		}
 		return err
 	}
 

@@ -3,8 +3,6 @@ package cli
 import (
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/spf13/cobra"
-
-	"fmt"
 )
 
 // NewCmdGitStack is the root for Git Config
@@ -12,10 +10,8 @@ func NewCmdGitStack() *cobra.Command {
 	gitStackCmd := &cobra.Command{
 		Use:   "stack REPO",
 		Short: "Configure Git stack",
+		Args:  repoArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 1 {
-				return fmt.Errorf("Command requires a repository argument")
-			}
 			return gitStackForRepo(cmd, args[0])
 		},
 	}
@@ -63,10 +59,8 @@ func NewCmdGitStackSet() *cobra.Command {
 	gitStackSetCmd := &cobra.Command{
 		Use:   "set REPO STACK",
 		Short: "Set Git stack for repo",
+		Args:  usageArgs(cobra.ExactArgs(2), "Please specify a repository and a stack"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) < 2 {
-				return fmt.Errorf("Please specify a repository and a stack")
-			}
 			return gitStackUpdate(cmd, args[0], args[1])
 		},
 	}

@@ -111,6 +111,22 @@ func TestVersionsCommandSuccess(t *testing.T) {
 	}
 }
 
+func TestVersionsCommandEmpty(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	path := "/packages/pkg-name/versions"
+	server := testutil.APIServer(t, "GET", path, "[]", 200)
+	defer server.Close()
+
+	cc := testContext(term, auth, server)
+	if err := runCommand(cc, []string{"versions", "pkg-name"}); err != nil {
+		t.Fatal(err)
+	}
+
+	expectOutput(t, term, "No versions found for package \"pkg-name\"\n", "")
+}
+
 func TestVersionsCommandUnauthorized(t *testing.T) {
 	path := "/packages/pkg-name/versions"
 	server := testutil.APIServer(t, "GET", path, "[]", 200)

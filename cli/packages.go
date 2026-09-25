@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"github.com/briandowns/spinner"
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/pkg/terminal"
@@ -9,10 +8,7 @@ import (
 
 	"context"
 	"fmt"
-	"os"
-	"strings"
 	"text/tabwriter"
-	"time"
 )
 
 // NewCmdPackages creates the "packages" command
@@ -21,6 +17,7 @@ func NewCmdPackages() *cobra.Command {
 		Use:     "packages",
 		Aliases: []string{"list"},
 		Short:   "List packages in this account",
+		Args:    noArgs,
 		RunE:    listPackages,
 	}
 }
@@ -30,6 +27,7 @@ func NewCmdVersions() *cobra.Command {
 	return &cobra.Command{
 		Use:   "versions PACKAGE",
 		Short: "List versions for a package",
+		Args:  usageArgs(cobra.ExactArgs(1), "Please specify exactly one package"),
 		RunE:  listVersions,
 	}
 }
@@ -57,7 +55,9 @@ func listPackages(cmd *cobra.Command, args []string) error {
 
 	// Handle no packages
 	if len(packages) == 0 {
-		term.Println("No packages found in this account")
+		if err == nil {
+			term.Println("No packages found in this account")
+		}
 		return err
 	}
 
@@ -75,10 +75,6 @@ func listPackages(cmd *cobra.Command, args []string) error {
 }
 
 func listVersions(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("Please specify a package")
-	}
-
 	cc := cmd.Context()
 	term := ctx.Terminal(cc)
 	c, err := newAPIClient(cc)
@@ -98,6 +94,14 @@ func listVersions(cmd *cobra.Command, args []string) error {
 		versions = append(versions, resp.Versions...)
 		return resp.Pagination, nil
 	})
+
+	// Handle no versions
+	if len(versions) == 0 {
+		if err == nil {
+			term.Printf("No versions found for package %q\n", args[0])
+		}
+		return err
+	}
 
 	// Print results
 	term.Printf("\n*** %s versions ***\n\n", args[0])
@@ -127,11 +131,11 @@ func iterateAll(cc context.Context, showSpinner bool, fn func(req *api.Paginatio
 		Limit: 100,
 	}
 
-	var spin *spinner.Spinner
+	// Spinner is shown only on a TTY, and only from the second page on
+	var stopSpinner func()
 	defer func() {
-		if spin != nil {
-			spin.Stop()
-			term.Printf("\r")
+		if stopSpinner != nil {
+			stopSpinner()
 		}
 	}()
 
@@ -144,16 +148,14 @@ func iterateAll(cc context.Context, showSpinner bool, fn func(req *api.Paginatio
 		pageReq.Page = ""
 		if pageResp != nil {
 			pageReq.Page = pageResp.NextPageCursor()
-			if spin == nil && showSpinner { // Start spinner on second page
-				spin = spinner.New(spinner.CharSets[11], 100*time.Millisecond, spinner.WithWriter(os.Stderr))
-				spin.FinalMSG = "\r" + strings.Repeat(" ", 20) + "\r"
-				spin.Suffix = " Fetching ..."
-				spin.Start()
-			}
 		}
 
 		if pageReq.Page == "" || cc.Err() != nil {
 			break
+		}
+
+		if stopSpinner == nil && showSpinner {
+			stopSpinner = terminal.SpinIfTerminal(term, " Fetching ...")
 		}
 	}
 

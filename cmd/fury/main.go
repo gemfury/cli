@@ -4,7 +4,6 @@ import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/cli"
 
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,9 +27,8 @@ func main() {
 		rootCmd.SetArgs(args)
 	}
 
-	// Process command and deliver results
-	if err := rootCmd.ExecuteContext(cc); err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
+	// Execute reports any error; only the exit status is left to set
+	if err := cli.Execute(cc, rootCmd); err != nil {
 		os.Exit(1)
 	}
 }

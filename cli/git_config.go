@@ -16,9 +16,8 @@ func NewCmdGitConfig() *cobra.Command {
 	gitConfigCmd := &cobra.Command{
 		Use:   "config REPO",
 		Short: "Configure Git build",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return filteredGitConfig(cmd, args, false)
-		},
+		Args:  repoArg,
+		RunE:  filteredGitConfig,
 	}
 
 	gitConfigCmd.AddCommand(NewCmdGitConfigSet())
@@ -28,27 +27,20 @@ func NewCmdGitConfig() *cobra.Command {
 	return gitConfigCmd
 }
 
-// NewCmdGitConfigGet updates one or more configuration keys
+// NewCmdGitConfigGet retrieves one or more configuration keys
 func NewCmdGitConfigGet() *cobra.Command {
 	gitConfigGetCmd := &cobra.Command{
-		Use:   "get REPO KEY",
+		Use:   "get REPO KEY...",
 		Short: "Get Git build environment key",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return filteredGitConfig(cmd, args, true)
-		},
+		Args:  usageArgs(cobra.MinimumNArgs(2), "Please specify a repository and at least one key"),
+		RunE:  filteredGitConfig,
 	}
 
 	return gitConfigGetCmd
 }
 
 // Filtered/unfiltered retrieval of Git Config for commands above
-func filteredGitConfig(cmd *cobra.Command, args []string, filter bool) error {
-	if filter && len(args) < 2 {
-		return fmt.Errorf("Please specify a repository and a key")
-	} else if !filter && len(args) != 1 {
-		return fmt.Errorf("Command requires only a repository")
-	}
-
+func filteredGitConfig(cmd *cobra.Command, args []string) error {
 	cc := cmd.Context()
 	term := ctx.Terminal(cc)
 	c, err := newAPIClient(cc)
@@ -62,7 +54,7 @@ func filteredGitConfig(cmd *cobra.Command, args []string, filter bool) error {
 	}
 
 	filteredConfig := config
-	if keys := args[1:]; filter && len(keys) > 0 {
+	if keys := args[1:]; len(keys) > 0 {
 		filteredConfig = make([]api.GitConfigPair, 0, len(keys))
 		for _, c := range config {
 			for _, k := range keys {
@@ -94,20 +86,24 @@ func filteredGitConfig(cmd *cobra.Command, args []string, filter bool) error {
 // NewCmdGitConfigSet updates one or more configuration keys
 func NewCmdGitConfigSet() *cobra.Command {
 	gitConfigSetCmd := &cobra.Command{
-		Use:   "set REPO KEY=VAL",
+		Use:   "set REPO KEY=VAL...",
 		Short: "Set Git build environment key",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) < 2 {
-				return fmt.Errorf("Please specify a repository and a KEY=VALUE")
-			}
-
-			vars := map[string]*string{}
-			for _, pairStr := range args[1:] {
-				pair := strings.SplitN(pairStr, "=", 2)
-				if len(pair) != 2 {
-					return fmt.Errorf("Argument has no value: %s", pairStr)
+		Args: cobra.MatchAll(
+			usageArgs(cobra.MinimumNArgs(2), "Please specify a repository and at least one KEY=VALUE"),
+			func(cmd *cobra.Command, args []string) error {
+				for _, pair := range args[1:] {
+					if !strings.Contains(pair, "=") {
+						return usageErrorf("Argument has no value: %s", pair)
+					}
 				}
-				vars[pair[0]] = &pair[1]
+				return nil
+			},
+		),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			vars := map[string]*string{}
+			for _, pair := range args[1:] {
+				key, val, _ := strings.Cut(pair, "=")
+				vars[key] = &val
 			}
 
 			return gitConfigUpdate(cmd, args[0], vars)
@@ -117,16 +113,13 @@ func NewCmdGitConfigSet() *cobra.Command {
 	return gitConfigSetCmd
 }
 
-// NewCmdGitConfigSet updates one or more configuration keys
+// NewCmdGitConfigUnset removes one or more configuration keys
 func NewCmdGitConfigUnset() *cobra.Command {
 	gitConfigUnsetCmd := &cobra.Command{
-		Use:   "unset REPO KEY",
+		Use:   "unset REPO KEY...",
 		Short: "Remove Git build environment key",
+		Args:  usageArgs(cobra.MinimumNArgs(2), "Please specify a repository and at least one KEY"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) < 2 {
-				return fmt.Errorf("Please specify a repository and a KEY")
-			}
-
 			vars := map[string]*string{}
 			for _, key := range args[1:] {
 				vars[key] = nil

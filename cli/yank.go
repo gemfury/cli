@@ -18,17 +18,18 @@ func NewCmdYank() *cobra.Command {
 	var forceFlag bool
 
 	yankCmd := &cobra.Command{
-		Use:   "yank PACKAGE@VERSION",
+		Use:   "yank PACKAGE@VERSION...",
 		Short: "Remove a package version",
+		Args: cobra.MatchAll(
+			usageArgs(cobra.MinimumNArgs(1), "Please specify at least one package"),
+			func(cmd *cobra.Command, args []string) error {
+				if versionFlag != "" && len(args) > 1 {
+					return usageErrorf("Use PACKAGE@VERSION for multiple yanks")
+				}
+				return nil
+			},
+		),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return fmt.Errorf("Please specify at least one package")
-			}
-
-			if versionFlag != "" && len(args) > 1 {
-				return fmt.Errorf("Use PACKAGE@VERSION for multiple yanks")
-			}
-
 			cc := cmd.Context()
 			term := ctx.Terminal(cc)
 			c, err := newAPIClient(cc)
