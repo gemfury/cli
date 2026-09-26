@@ -125,6 +125,18 @@ func expectOutputLines(t *testing.T, term terminal.TestTerm, marker string, line
 	}
 }
 
+// offlineServer fails the test on any request. Registering "/" also
+// suppresses testutil's default browser-login handler, so a command that
+// wrongly attempts login fails loudly instead of quietly succeeding.
+func offlineServer(t *testing.T) *httptest.Server {
+	return testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			t.Errorf("Unexpected API request: %s %s", r.Method, r.URL)
+			w.WriteHeader(http.StatusNotImplemented)
+		})
+	})
+}
+
 // We first test with manual (prompt) login, and then test with "--api-token" flag
 func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Server, opts ...testOption) {
 	auth := terminal.TestAuther("", "", nil)
@@ -178,6 +190,26 @@ func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.
 	}
 }
 
+// Help never requires authentication, and never contacts the API
+func TestHelpWithoutAuth(t *testing.T) {
+	for _, args := range [][]string{{"help"}, {"help", "push"}, {"git", "--help"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			server := offlineServer(t)
+			defer server.Close()
+
+			term := terminal.NewForTest()
+			cc := testContext(term, terminal.TestAuther("", "", nil), server)
+			if err := runCommandNoErr(cc, args); err != nil {
+				t.Error(err)
+			}
+
+			if outStr := string(term.OutBytes()); !strings.Contains(outStr, "Usage:") {
+				t.Errorf("Expected help on stdout, got %q", outStr)
+			}
+		})
+	}
+}
+
 // Wrong arguments or flags are usage errors, caught before authentication,
 // so a logged-out user is not sent to log in first
 func TestUsageErrorOutput(t *testing.T) {
@@ -198,23 +230,17 @@ func TestUsageErrorOutput(t *testing.T) {
 		{[]string{"sharing", "add"}, "Please specify at least one collaborator"},
 		{[]string{"sharing", "extra"}, `unknown command "extra" for "fury sharing"`},
 		{[]string{"whoami", "extra"}, `unknown command "extra" for "fury whoami"`},
+		{[]string{"logout", "now"}, `unknown command "now" for "fury logout"`},
 		{[]string{"packages", "--json"}, "unknown flag: --json"},
 	}
 
-	// Catch-all handler fails on any API call; it also displaces the
-	// default browser-login handler, so a login attempt fails too
-	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			t.Errorf("Unexpected API request: %s %s", r.Method, r.URL)
-		})
-	})
-	defer server.Close()
-
 	for _, tc := range cases {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
-			auth := terminal.TestAuther("", "", nil)
+			server := offlineServer(t)
+			defer server.Close()
+
 			term := terminal.NewForTest()
-			cc := testContext(term, auth, server)
+			cc := testContext(term, terminal.TestAuther("", "", nil), server)
 
 			err := runCommand(cc, tc.args)
 			if !cli.IsUsageError(err) {
@@ -248,10 +274,11 @@ func TestRunnableCommandsDeclareArgs(t *testing.T) {
 }
 
 func TestUnknownCommandOutput(t *testing.T) {
-	auth := terminal.TestAuther("user", "abc123", nil)
-	term := terminal.NewForTest()
+	server := offlineServer(t)
+	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	term := terminal.NewForTest()
+	cc := testContext(term, terminal.TestAuther("", "", nil), server)
 	if err := runCommand(cc, []string{"nosuchcmd"}); err == nil {
 		t.Fatal("Expected error for unknown command")
 	}

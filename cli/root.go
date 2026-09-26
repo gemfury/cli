@@ -32,7 +32,7 @@ func NewRootCommand(cc context.Context) *cobra.Command {
 		return usageErrorf("%s", err)
 	})
 
-	// Ensure authentication for all commands except "logout"
+	// Ensure authentication for all commands (see skipsAuth for exceptions)
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		return preRunCheckAuthentication(cmd, args)
 	}

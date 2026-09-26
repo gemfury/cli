@@ -16,17 +16,21 @@ import (
 )
 
 // Initialize new Gemfury API client with authentication
-func newAPIClient(cc context.Context) (c *api.Client, err error) {
-	flags := ctx.GlobalFlags(cc)
-
+func newAPIClient(cc context.Context) (*api.Client, error) {
 	// Token comes from CLI flags or .netrc
 	token, err := contextAuthToken(cc)
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize client with authentication
-	c = api.NewClient(token, flags.Account)
+	return newAPIClientWithToken(cc, token), nil
+}
+
+// Initialize new Gemfury API client with an explicit token,
+// bypassing the usual flag-then-netrc resolution
+func newAPIClientWithToken(cc context.Context, token string) *api.Client {
+	flags := ctx.GlobalFlags(cc)
+	c := api.NewClient(token, flags.Account)
 
 	// Endpoint overrides (testing, staging). The client joins paths onto
 	// these and compares URLs against them, so normalize away a trailing "/".
@@ -37,7 +41,7 @@ func newAPIClient(cc context.Context) (c *api.Client, err error) {
 		c.Endpoint = strings.TrimSuffix(e, "/")
 	}
 
-	return c, nil
+	return c
 }
 
 // Extract authentication token from context (flag or .netrc)
@@ -49,15 +53,43 @@ func contextAuthToken(cc context.Context) (string, error) {
 	return token, err
 }
 
+// skipAuthAnnotation marks a command that must run without authentication,
+// such as the ones that manage the session itself
+const skipAuthKey = "fury.skip-auth"
+
+var skipAuthAnnotation = map[string]string{skipAuthKey: "true"}
+
+// skipsAuth reports whether cmd runs without authentication: commands
+// annotated with skipAuthAnnotation, plus Cobra's built-in top-level
+// help and shell-completion commands
+func skipsAuth(cmd *cobra.Command) bool {
+	if cmd.Annotations[skipAuthKey] == "true" {
+		return true
+	}
+
+	if cmd.Parent() == cmd.Root() {
+		switch cmd.Name() {
+		case "help", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd:
+			return true
+		}
+	}
+
+	return false
+}
+
 // Hook for root command to ensure user is authenticated or prompt to login
 func preRunCheckAuthentication(cmd *cobra.Command, args []string) error {
-	if n := cmd.Name(); n == "logout" || n == "login" {
+	if skipsAuth(cmd) {
 		return nil
 	}
 
 	_, err := ensureAuthenticated(cmd, false)
 	return err
 }
+
+// errLoginCancelled is returned when the user backs out of the login
+// prompt. "login" exits quietly on it; other commands report it.
+var errLoginCancelled = errors.New("Login cancelled")
 
 func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResponse, error) {
 	cc := cmd.Context()
@@ -81,7 +113,9 @@ func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResp
 		resp, err = interactiveLogin(cmd)
 	}
 
-	if err != nil {
+	if errors.Is(err, promptui.ErrAbort) {
+		return nil, errLoginCancelled
+	} else if err != nil {
 		return nil, err
 	}
 
