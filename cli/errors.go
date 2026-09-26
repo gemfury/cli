@@ -48,6 +48,19 @@ func noArgs(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// noResults handles the end of a paginated listing that produced no items.
+// It prints msg only when the listing was genuinely empty, not when it failed
+// before returning anything, and reports whether the caller should stop.
+func noResults(term terminal.Terminal, count int, err error, msg string) bool {
+	if count > 0 {
+		return false
+	}
+	if err == nil {
+		term.Println(msg)
+	}
+	return true
+}
+
 // failures collects what went wrong in a command that processes several
 // items (push, yank, sharing add, ...) and keeps going after one fails.
 //

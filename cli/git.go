@@ -178,11 +178,7 @@ func listRepos(cmd *cobra.Command, args []string) error {
 		return resp.Pagination, nil
 	})
 
-	// Handle no repositories
-	if len(repos) == 0 {
-		if err == nil {
-			term.Println("No Git repositories found in this account")
-		}
+	if noResults(term, len(repos), err, "No Git repositories found in this account") {
 		return err
 	}
 

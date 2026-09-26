@@ -123,12 +123,22 @@ func TestPushCommandPartialFailure(t *testing.T) {
 	defer server.Close()
 
 	cc := testContext(term, auth, server)
+
+	// One good file whose name contains a "%" (it must not be treated as a
+	// format verb by the --quiet status line), and one missing file
+	good := filepath.Join(t.TempDir(), "100%d.gem")
+	if data, err := os.ReadFile(samplePackagePath()); err != nil {
+		t.Fatal(err)
+	} else if err := os.WriteFile(good, data, 0600); err != nil {
+		t.Fatal(err)
+	}
 	missing := filepath.Join(t.TempDir(), "missing.gem")
-	err := runCommand(cc, []string{"push", "--quiet", samplePackagePath(), missing})
+
+	err := runCommand(cc, []string{"push", "--quiet", good, missing})
 	expectSummaryError(t, err, os.ErrNotExist, "1 of 2 uploads failed")
 
 	expectOutput(t, term,
-		"Uploading sample.txt - done\nUploading missing.gem - file not found\n",
+		"Uploading 100%d.gem - done\nUploading missing.gem - file not found\n",
 		"Error: 1 of 2 uploads failed\n")
 }
 

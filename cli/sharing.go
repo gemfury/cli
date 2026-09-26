@@ -48,11 +48,7 @@ func listMembers(cmd *cobra.Command, args []string) error {
 		return resp.Pagination, nil
 	})
 
-	// Handle no members
-	if len(members) == 0 {
-		if err == nil {
-			term.Println("No members found for this account")
-		}
+	if noResults(term, len(members), err, "No members found for this account") {
 		return err
 	}
 
@@ -163,11 +159,7 @@ func NewCmdAccounts() *cobra.Command {
 				return resp.Pagination, nil
 			})
 
-			// Handle no collaborations
-			if len(members) == 0 {
-				if err == nil {
-					term.Println("No collaborations found for this account")
-				}
+			if noResults(term, len(members), err, "No collaborations found for this account") {
 				return err
 			}
 

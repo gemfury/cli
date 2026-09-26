@@ -53,11 +53,7 @@ func listPackages(cmd *cobra.Command, args []string) error {
 		return resp.Pagination, nil
 	})
 
-	// Handle no packages
-	if len(packages) == 0 {
-		if err == nil {
-			term.Println("No packages found in this account")
-		}
+	if noResults(term, len(packages), err, "No packages found in this account") {
 		return err
 	}
 
@@ -95,11 +91,7 @@ func listVersions(cmd *cobra.Command, args []string) error {
 		return resp.Pagination, nil
 	})
 
-	// Handle no versions
-	if len(versions) == 0 {
-		if err == nil {
-			term.Printf("No versions found for package %q\n", args[0])
-		}
+	if noResults(term, len(versions), err, fmt.Sprintf("No versions found for package %q", args[0])) {
 		return err
 	}
 
