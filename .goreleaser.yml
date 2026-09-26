@@ -42,16 +42,16 @@ changelog:
   disable: true
 
 release:
-  draft: true
+  draft: false
 
 nfpms:
   - id: nfpm-default
     package_name: fury-cli
 
     vendor: Gemfury.com
-    homepage: https://fury.co
+    homepage: https://gemfury.com/
     maintainer: Gemfury Team <team@gemfury.com>
-    description: Gemfury CLI
+    description: CLI for the Gemfury package repository
     license: Proprietary
 
     formats:
@@ -89,12 +89,55 @@ brews:
     homepage: "https://gemfury.com/"
 
     # App's description.
-    description: "CLI For Gemfury Package Repository"
+    description: "CLI for the Gemfury package repository"
 
     # Conflicts with Ruby CLI
     conflicts:
       - gemfury
 
+    # Transition notice; retire it together with this block.
+    caveats: |
+      The fury-cli formula will be replaced by a cask in an upcoming release.
+      To switch early: brew uninstall fury-cli && brew install --cask gemfury/tap/fury-cli
+
     # Run to `brew test` the formula.
     test: |
       system "#{bin}/fury --version"
+
+# Replaces the deprecated `brews` formula above; both publish to the same
+# tap until the formula is retired.
+homebrew_casks:
+  - name: fury-cli
+
+    # Defaults to the cask name (fury-cli); the archive ships `fury`.
+    binaries:
+      - fury
+
+    repository:
+      owner: gemfury
+      name: homebrew-tap
+      token: "{{ .Env.BREW_TAP_GITHUB_TOKEN }}"
+
+    commit_author:
+      email: goreleaser@gemfury.com
+      name: goreleaser
+
+    directory: Casks
+
+    homepage: "https://gemfury.com/"
+    description: "CLI for the Gemfury package repository"
+
+    # A cask cannot declare a conflict with a formula, so warn about the
+    # Ruby "gemfury" formula here instead.
+    caveats: |
+      This cask installs the "fury" binary and cannot coexist with the
+      legacy Ruby "gemfury" formula. Uninstall it first if present.
+
+    # Homebrew quarantines cask downloads and Gatekeeper blocks unsigned
+    # quarantined binaries, so clear the bit. Linux casks need no such step.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-d", "com.apple.quarantine", "#{staged_path}/fury"]
+          end
