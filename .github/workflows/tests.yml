@@ -6,18 +6,26 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Install Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v7
       with:
         go-version-file: 'go.mod'
     - name: Download modules
-      if: steps.cache.outputs.cache-hit != 'true'
       run: go mod download
+    - name: Vet
+      run: go vet ./...
     - name: Run tests
       run: go test -race -coverprofile coverage.out ./...
     - name: Check code coverage
