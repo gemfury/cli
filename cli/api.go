@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -27,12 +28,13 @@ func newAPIClient(cc context.Context) (c *api.Client, err error) {
 	// Initialize client with authentication
 	c = api.NewClient(token, flags.Account)
 
-	// Endpoint configuration for testing
+	// Endpoint overrides (testing, staging). The client joins paths onto
+	// these and compares URLs against them, so normalize away a trailing "/".
 	if e := flags.PushEndpoint; e != "" {
-		c.PushEndpoint = e
+		c.PushEndpoint = strings.TrimSuffix(e, "/")
 	}
 	if e := flags.Endpoint; e != "" {
-		c.Endpoint = e
+		c.Endpoint = strings.TrimSuffix(e, "/")
 	}
 
 	return c, nil

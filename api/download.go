@@ -28,13 +28,19 @@ func (c *Client) DumpVersions(cc context.Context, body *PaginationRequest, kindF
 	return &resp, err
 }
 
-// DownloadVersion uses the "download_url" field to download the Version file
+// DownloadVersion uses the "download_url" field to download the Version file.
+// The URL must be served by this client's API endpoint, since the request is
+// authenticated with the client's token.
 func (c *Client) DownloadVersion(cc context.Context, v *Version) (io.ReadCloser, int64, error) {
-	if !strings.HasPrefix(v.DownloadURL, c.Endpoint) {
-		return nil, 0, fmt.Errorf("Download URL not compatible with API client")
+	path, ok := strings.CutPrefix(v.DownloadURL, c.Endpoint)
+	if !ok || !strings.HasPrefix(path, "/") {
+		return nil, 0, fmt.Errorf("Download URL %q is not served by %s", v.DownloadURL, c.Endpoint)
 	}
 
-	path := strings.TrimPrefix(v.DownloadURL, defaultEndpoint)
 	resp, err := c.newRequest(cc, "GET", path, true).doCommon()
-	return resp.Body, resp.ContentLength, err
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return resp.Body, resp.ContentLength, nil
 }

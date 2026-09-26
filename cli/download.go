@@ -172,34 +172,40 @@ func downloadVersion(cc context.Context, client *api.Client, v *api.Version, des
 		return err
 	}
 
-	// Open file for writing. It must not exist, otherwise fail
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	// Request file from Gemfury API
+	// Request file from Gemfury API before touching the filesystem,
+	// so a refused or failed request leaves no empty file behind
 	body, size, err := client.DownloadVersion(cc, v)
 	if err != nil {
 		return err
 	}
 	defer body.Close()
 
+	// Open file for writing. It must not exist, otherwise fail
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return err
+	}
+
 	// Wrap with status bar
 	bar := term.StartProgress(size, status("⌛")+" ")
 	reader := bar.NewProxyReader(body)
 
-	// Download and write to disk
+	// Download and write to disk. Close reports deferred write errors,
+	// and a partial file would block retries (and fail its checksum),
+	// so it is removed on any error.
 	_, err = io.Copy(file, reader)
 	bar.Finish()
 
-	// Status output
-	if err == nil {
-		term.Println(status("💾"))
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		os.Remove(path)
+		return err
 	}
 
-	return err
+	term.Println(status("💾"))
+	return nil
 }
 
 // Validate checksum for file
