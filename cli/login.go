@@ -22,8 +22,9 @@ func NewCmdLogout() *cobra.Command {
 			term := ctx.Terminal(cc)
 			auth := ctx.Auther(cc)
 
-			// Logout acts on saved credentials only; a token passed inline
-			// is never stored, so there is nothing to clear for it.
+			// Logout acts on saved credentials only. --api-token is rejected,
+			// as a token given that way is never stored; FURY_TOKEN is ignored
+			// rather than rejected, as it is set for all commands.
 			if ctx.GlobalFlags(cc).AuthToken != "" {
 				return usageErrorf("Logout clears saved credentials only; do not pass --api-token")
 			}
@@ -55,8 +56,8 @@ func NewCmdLogout() *cobra.Command {
 
 // Deactivates & deletes the saved CLI token. The token is passed explicitly
 // so that the revocation always targets the saved credentials, never a token
-// supplied via --api-token for the current invocation. If the server refuses
-// the revocation, the user is asked onFailConfirm before wiping anyway.
+// given inline for the current invocation. If the server refuses the
+// revocation, the user is asked onFailConfirm before wiping anyway.
 func logoutCurrent(cc context.Context, token string, onFailConfirm string) error {
 	c := newAPIClientWithToken(cc, token)
 
@@ -83,11 +84,11 @@ func NewCmdLogin() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cc := cmd.Context()
 			auth := ctx.Auther(cc)
-			tokenFlag := ctx.GlobalFlags(cc).AuthToken
+			inlineToken := inlineAuthToken(cc)
 
-			// Logout previous CLI token, if present in .netrc. With --api-token
-			// we only verify the given token, so saved credentials are left alone.
-			if tokenFlag == "" {
+			// Logout previous CLI token, if present in .netrc. With an inline
+			// token, we only verify it, so saved credentials are left alone.
+			if inlineToken == "" {
 				if _, token, err := auth.Auth(); err == nil && token != "" {
 					confirm := "Do you want to ignore & continue with your login? [y/N]"
 					if err := logoutCurrent(cc, token, confirm); err != nil {
@@ -114,7 +115,7 @@ func NewCmdLogin() *cobra.Command {
 
 			term := ctx.Terminal(cc)
 
-			if tokenFlag != "" {
+			if inlineToken != "" {
 				term.Printf("API token belongs to %q\n", user.Name)
 			} else {
 				term.Printf("You are logged in as %q\n", user.Email)

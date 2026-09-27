@@ -14,6 +14,9 @@ const (
 	ctxAutherKey
 )
 
+// CmdGlobalFlags are the global flags as given on the command line. To get
+// AuthToken or Account, use the cli helpers that fall back to environment,
+// unless only the flag is of interest.
 type CmdGlobalFlags struct {
 	PushEndpoint string
 	Endpoint     string

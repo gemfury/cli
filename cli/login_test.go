@@ -179,33 +179,10 @@ func TestCommandNotLoggedInNonInteractive(t *testing.T) {
 				t.Fatalf("Expected cli.ErrNotLoggedIn, got: %v", err)
 			}
 
-			expectOutput(t, term, "", "Error: Not logged in. Run \"fury login\" in a terminal or pass --api-token.\n")
+			expectOutput(t, term, "", "Error: Not logged in. Set FURY_TOKEN or run \"fury login\" in a terminal.\n")
 
 			if u, p, _ := auth.Auth(); u != "" || p != "" {
 				t.Errorf("Expected no saved credentials, got %q/%q", u, p)
-			}
-		})
-	}
-}
-
-// Credentials make a terminal unnecessary, whether saved or passed inline
-func TestCommandNonInteractiveWithCredentials(t *testing.T) {
-	for name, tc := range map[string]struct {
-		auth terminal.Auther
-		args []string
-	}{
-		"saved": {terminal.TestAuther("user", "abc123", nil), []string{"whoami"}},
-		"flag":  {terminal.TestAuther("", "", nil), []string{"whoami", "--api-token", "abc123"}},
-	} {
-		t.Run(name, func(t *testing.T) {
-			term := terminal.NewForTest()
-			term.SetInteractive(false)
-
-			server := testutil.APIServer(t, "GET", "/users/me", whoamiResponse, 200)
-
-			cc := testContext(t, term, tc.auth, server)
-			if err := runCommandNoErr(cc, tc.args); err != nil {
-				t.Error(err)
 			}
 		})
 	}
@@ -242,36 +219,45 @@ func TestLoginCommandReplacesSavedToken(t *testing.T) {
 	}
 }
 
-// With --api-token, login only verifies the token; saved credentials
-// are neither revoked nor replaced
-func TestLoginCommandWithTokenFlagKeepsSaved(t *testing.T) {
-	auth := terminal.TestAuther("old@example.com", "old-token", nil)
-	term := terminal.NewForTest()
+// With an inline token, login only verifies that token;
+// saved credentials are neither revoked nor replaced
+func TestLoginCommandWithInlineTokenKeepsSaved(t *testing.T) {
+	for name, tc := range map[string]struct {
+		env  string
+		args []string
+	}{
+		"flag": {"", []string{"login", "--api-token", "inline-token"}},
+		"env":  {"inline-token", []string{"login"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("FURY_TOKEN", tc.env)
+			auth := terminal.TestAuther("old@example.com", "old-token", nil)
+			term := terminal.NewForTest()
 
-	server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
-		h.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
-			t.Errorf("Unexpected revoke of %q", r.Header.Get("Authorization"))
-			w.WriteHeader(http.StatusNoContent)
-		})
-		h.HandleFunc("/users/me", func(w http.ResponseWriter, r *http.Request) {
-			if a := r.Header.Get("Authorization"); a != "flag-token" {
-				t.Errorf("Expected flag token to be verified, got %q", a)
+			server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
+				h.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
+					t.Errorf("Unexpected revoke of %q", r.Header.Get("Authorization"))
+					w.WriteHeader(http.StatusNoContent)
+				})
+				h.HandleFunc("/users/me", func(w http.ResponseWriter, r *http.Request) {
+					if a := r.Header.Get("Authorization"); a != "inline-token" {
+						t.Errorf("Expected inline token to be verified, got %q", a)
+					}
+					w.Write([]byte(whoamiResponse))
+				})
+			})
+
+			cc := testContext(t, term, auth, server)
+			if err := runCommandNoErr(cc, tc.args); err != nil {
+				t.Fatal(err)
 			}
-			w.Write([]byte(whoamiResponse))
+
+			expectOutput(t, term, "API token belongs to \"joetest\"\n", "")
+
+			if u, p, _ := auth.Auth(); u != "old@example.com" || p != "old-token" {
+				t.Errorf("Expected saved credentials untouched, got %q/%q", u, p)
+			}
 		})
-	})
-
-	cc := testContext(t, term, auth, server)
-	if err := runCommandNoErr(cc, []string{"login", "--api-token", "flag-token"}); err != nil {
-		t.Fatal(err)
-	}
-
-	if exp := "API token belongs to \"joetest\"\n"; string(term.OutBytes()) != exp {
-		t.Errorf("Expected output %q, got %q", exp, term.OutBytes())
-	}
-
-	if u, p, _ := auth.Auth(); u != "old@example.com" || p != "old-token" {
-		t.Errorf("Expected saved credentials untouched, got %q/%q", u, p)
 	}
 }
 
@@ -281,43 +267,45 @@ func TestLoginCommandUnauthorized(t *testing.T) {
 	server.Close()
 }
 
-// Login is more or less the same as the "whoami" command
-// because all commands force a login if logged out
-
+// Logout acts on the saved credentials, whatever FURY_TOKEN holds
 func TestLogoutCommandSuccess(t *testing.T) {
-	auth := terminal.TestAuther("user", "abc123", nil)
-	term := terminal.NewForTest()
+	for name, env := range map[string]string{"without env": "", "with env": "env-token"} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("FURY_TOKEN", env)
+			auth := terminal.TestAuther("user", "abc123", nil)
+			term := terminal.NewForTest()
 
-	// Fire up test server; the saved token must be the one revoked
-	server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
-		h.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
-			if a := r.Header.Get("Authorization"); a != "abc123" {
-				t.Errorf("Expected saved token to be revoked, got %q", a)
+			// Fire up test server; the saved token must be the one revoked
+			var revoked int
+			server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
+				h.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
+					if a := r.Header.Get("Authorization"); a != "abc123" {
+						t.Errorf("Expected saved token to be revoked, got %q", a)
+					}
+					revoked++
+					w.WriteHeader(http.StatusNoContent)
+				})
+			})
+
+			term.SetPromptResponses(map[string]string{
+				"Are you sure you want to logout? [y/N]": "Y",
+			})
+
+			cc := testContext(t, term, auth, server)
+			if err := runCommandNoErr(cc, []string{"logout"}); err != nil {
+				t.Error(err)
 			}
-			w.WriteHeader(http.StatusNoContent)
+
+			expectOutput(t, term, "You have been logged out\n", "")
+
+			if revoked != 1 {
+				t.Errorf("Expected one revocation, got %d", revoked)
+			}
+
+			if auth.User != "" || auth.Pass != "" || auth.Err != nil {
+				t.Errorf("Expected command to wipe auth: %+v", auth)
+			}
 		})
-	})
-
-	term.SetPromptResponses(map[string]string{
-		"Are you sure you want to logout? [y/N]": "Y",
-	})
-
-	cc := cli.TestContext(t.Context(), term, auth)
-	flags := ctx.GlobalFlags(cc)
-	flags.Endpoint = server.URL
-
-	err := runCommandNoErr(cc, []string{"logout"})
-	if err != nil {
-		t.Error(err)
-	}
-
-	outStr := string(term.OutBytes())
-	if exp := "You have been logged out\n"; outStr != exp {
-		t.Errorf("Expected output to include %q, got %q", exp, outStr)
-	}
-
-	if auth.User != "" || auth.Pass != "" || auth.Err != nil {
-		t.Errorf("Expected command to wipe auth: %+v", auth)
 	}
 }
 

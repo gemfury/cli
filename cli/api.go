@@ -10,13 +10,13 @@ import (
 
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"time"
 )
 
 // Initialize new Gemfury API client with authentication
 func newAPIClient(cc context.Context) (*api.Client, error) {
-	// Token comes from CLI flags or .netrc
 	token, err := contextAuthToken(cc)
 	if err != nil {
 		return nil, err
@@ -26,10 +26,10 @@ func newAPIClient(cc context.Context) (*api.Client, error) {
 }
 
 // Initialize new Gemfury API client with an explicit token,
-// bypassing the usual flag-then-netrc resolution
+// bypassing the usual resolution by contextAuthToken
 func newAPIClientWithToken(cc context.Context, token string) *api.Client {
 	flags := ctx.GlobalFlags(cc)
-	c := api.NewClient(token, flags.Account)
+	c := api.NewClient(token, contextAccount(cc))
 
 	// Endpoint overrides (testing, staging). The client joins paths onto
 	// these and compares URLs against them, so normalize away a trailing "/".
@@ -43,13 +43,34 @@ func newAPIClientWithToken(cc context.Context, token string) *api.Client {
 	return c
 }
 
-// Extract authentication token from context (flag or .netrc)
+// Extract authentication token from context (inline or .netrc)
 func contextAuthToken(cc context.Context) (string, error) {
-	if token := ctx.GlobalFlags(cc).AuthToken; token != "" {
+	if token := inlineAuthToken(cc); token != "" {
 		return token, nil
 	}
 	_, token, err := ctx.Auther(cc).Auth()
 	return token, err
+}
+
+// inlineAuthToken is the token given for this invocation,
+// rather than saved by "login": --api-token or else FURY_TOKEN
+func inlineAuthToken(cc context.Context) string {
+	return flagOrEnv(ctx.GlobalFlags(cc).AuthToken, "FURY_TOKEN")
+}
+
+// contextAccount is the account to act on: --account or else FURY_ACCOUNT.
+// When empty, it is the account of the authenticated user.
+func contextAccount(cc context.Context) string {
+	return flagOrEnv(ctx.GlobalFlags(cc).Account, "FURY_ACCOUNT")
+}
+
+// flagOrEnv is the value of a global flag or, when the flag
+// is not given, of the environment variable standing in for it
+func flagOrEnv(flag, env string) string {
+	if flag != "" {
+		return flag
+	}
+	return strings.TrimSpace(os.Getenv(env))
 }
 
 // skipAuthAnnotation marks a command that must run without authentication,
@@ -92,13 +113,13 @@ var errLoginCancelled = errors.New("Login cancelled")
 
 // ErrNotLoggedIn is returned when there are no credentials and no user at
 // the terminal to login (a pipe, CI, an agent), so login is not attempted
-var ErrNotLoggedIn = errors.New(`Not logged in. Run "fury login" in a terminal or pass --api-token.`)
+var ErrNotLoggedIn = errors.New(`Not logged in. Set FURY_TOKEN or run "fury login" in a terminal.`)
 
 func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResponse, error) {
 	cc := cmd.Context()
 	var err error
 
-	// Check whether we have login credentials from environment
+	// Already authenticated with a token given inline or saved in .netrc
 	if token, err := contextAuthToken(cc); token != "" || err != nil {
 		return nil, err
 	}

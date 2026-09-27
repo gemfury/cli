@@ -25,6 +25,11 @@ var failedOutRegexp = regexp.MustCompile(`(?m)^(Usage:|No .* found)`)
 // Top-level testing initializer
 func TestMain(m *testing.M) {
 	os.Setenv("TZ", "US/Pacific")
+
+	// Tests run the same whatever the developer's own Gemfury setup
+	os.Unsetenv("FURY_TOKEN")
+	os.Unsetenv("FURY_ACCOUNT")
+
 	os.Exit(m.Run())
 }
 
@@ -138,6 +143,11 @@ func offlineServer(t *testing.T) *httptest.Server {
 	})
 }
 
+// unusedAuther fails any command that consults the saved credentials
+func unusedAuther() terminal.Auther {
+	return terminal.TestAuther("", "", errors.New("TestAuther should not be called"))
+}
+
 // We first test with manual (prompt) login, and then test with "--api-token" flag
 func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Server, opts ...testOption) {
 	t.Helper()
@@ -162,8 +172,7 @@ func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Serv
 
 	// Testing with "--api-token" should skip calling Auth() on TestAuther.
 	// The context options only shape the logged-out run above.
-	auth = terminal.TestAuther("", "", errors.New("TestAuther should not be called"))
-	cc = testContext(t, term, auth, server)
+	cc = testContext(t, term, unusedAuther(), server)
 
 	args = append(args, "--api-token", "abc123")
 	if err := runCommand(cc, args); err != nil {

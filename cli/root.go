@@ -15,7 +15,11 @@ func NewRootCommand(cc context.Context) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "fury",
 		Short: "Command line interface to Gemfury API",
-		Long:  `See https://gemfury.com/help/gemfury-cli`,
+		Long: `See https://gemfury.com/help/gemfury-cli
+
+Environment variables:
+  FURY_TOKEN     Authentication token, unless --api-token is given
+  FURY_ACCOUNT   Account to act on, unless --account is given`,
 
 		// Execute reports errors and usage, not Cobra
 		SilenceErrors: true,
@@ -41,8 +45,8 @@ func NewRootCommand(cc context.Context) *cobra.Command {
 	// Global flags (account, verbose, etc)
 	flags := ctx.GlobalFlags(cc)
 	rootFlagSet := rootCmd.PersistentFlags()
-	rootFlagSet.StringVar(&flags.AuthToken, "api-token", "", "Inline authentication token")
-	rootFlagSet.StringVarP(&flags.Account, "account", "a", "", "Current account username")
+	rootFlagSet.StringVar(&flags.AuthToken, "api-token", "", "Inline authentication token (or set FURY_TOKEN)")
+	rootFlagSet.StringVarP(&flags.Account, "account", "a", "", "Current account username (or set FURY_ACCOUNT)")
 	rootCmd.SetGlobalNormalizationFunc(globalFlagNormalization)
 
 	// Connect child commands
