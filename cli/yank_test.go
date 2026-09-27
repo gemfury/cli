@@ -38,9 +38,8 @@ func TestYankCommandOnePackage(t *testing.T) {
 			w.Write([]byte("{}"))
 		})
 	})
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -106,9 +105,8 @@ func TestYankCommandMultiPackage(t *testing.T) {
 			w.Write([]byte("{}"))
 		})
 	})
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -125,21 +123,30 @@ func TestYankCommandMultiPackage(t *testing.T) {
 		"Problem looking up \"bar\": Invalid package/version specified\n",
 	)
 
+	// Stderr still holds the failures above, so from here on
+	// only the error of each command is checked
+
 	// When nothing is found, we expect "nothing found" error message
 	expNone := "No matching versions found\n"
-	err = runCommandNoErr(cc, []string{"yank", "foo@0.0.2", "--force"})
+	if err := runCommand(cc, []string{"yank", "foo@0.0.2", "--force"}); err != nil {
+		t.Error(err)
+	}
 	if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, expNone) {
 		t.Errorf("Expected output to include %q, got %q", expNone, outStr)
 	}
 
 	// No partial failure for multiple packages when some return nothing
-	err = runCommandNoErr(cc, []string{"yank", "foo@0.0.1", "foo@0.0.2", "--force"})
+	if err := runCommand(cc, []string{"yank", "foo@0.0.1", "foo@0.0.2", "--force"}); err != nil {
+		t.Error(err)
+	}
 	if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}
 
 	// Success all around (reusing the same test package URL)
-	err = runCommandNoErr(cc, []string{"yank", "foo@0.0.1", "foo@0.0.1", "--force"})
+	if err := runCommand(cc, []string{"yank", "foo@0.0.1", "foo@0.0.1", "--force"}); err != nil {
+		t.Error(err)
+	}
 	if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}
@@ -149,7 +156,9 @@ func TestYankCommandMultiPackage(t *testing.T) {
 		"Are you sure you want to delete these files? [y/N]": "Y",
 	})
 
-	err = runCommandNoErr(cc, []string{"yank", "foo@0.0.1"})
+	if err := runCommand(cc, []string{"yank", "foo@0.0.1"}); err != nil {
+		t.Error(err)
+	}
 	if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}
@@ -184,9 +193,8 @@ func TestYankCommandPartialRemovalFailure(t *testing.T) {
 			w.Write([]byte("{}"))
 		})
 	})
-	defer server.Close()
 
-	cc := testContext(term, auth, server)
+	cc := testContext(t, term, auth, server)
 	err := runCommand(cc, []string{"yank", "foo@0.0.1", "--force"})
 	expectSummaryError(t, err, api.ErrNotFound, "1 of 2 removals failed")
 

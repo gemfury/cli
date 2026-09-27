@@ -36,9 +36,8 @@ func TestGitRebuildCommandSuccess(t *testing.T) {
 			w.Write([]byte(gitRebuildResponse))
 		})
 	})
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -108,9 +107,8 @@ func TestGitRenameCommandSuccess(t *testing.T) {
 	// Fire up test server
 	path := "/git/repos/me/repo-name"
 	server := testutil.APIServer(t, "PATCH", path, "{}", 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -159,7 +157,7 @@ func TestGitDestroyCommandSuccess(t *testing.T) {
 	})
 	defer serverDestroy.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = serverDestroy.URL
 
@@ -185,7 +183,7 @@ func TestGitDestroyCommandSuccess(t *testing.T) {
 	defer serverReset.Close()
 
 	// Via "--reset-only" option
-	cc = cli.TestContext(term, auth)
+	cc = cli.TestContext(t.Context(), term, auth)
 	flags = ctx.GlobalFlags(cc)
 	flags.Endpoint = serverReset.URL
 
@@ -200,7 +198,7 @@ func TestGitDestroyCommandSuccess(t *testing.T) {
 	}
 
 	// Via "git:reset" command
-	cc = cli.TestContext(term, auth)
+	cc = cli.TestContext(t.Context(), term, auth)
 	flags = ctx.GlobalFlags(cc)
 	flags.Endpoint = serverReset.URL
 
@@ -246,9 +244,8 @@ func TestGitListCommandSuccess(t *testing.T) {
 	// Fire up test server
 	path := "/git/repos/me"
 	server := testutil.APIServerPaginated(t, "GET", path, gitReposResponses, 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 

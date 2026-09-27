@@ -26,9 +26,8 @@ func TestGitConfigCommandSuccess(t *testing.T) {
 	// Fire up test server
 	path := "/git/repos/me/repo-name/config-vars"
 	server := testutil.APIServer(t, "GET", path, gitConfigResponse, 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -66,9 +65,8 @@ func TestGitConfigGetCommandSuccess(t *testing.T) {
 	// Fire up test server
 	path := "/git/repos/me/repo-name/config-vars"
 	server := testutil.APIServer(t, "GET", path, gitConfigResponse, 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -108,9 +106,8 @@ func TestGitConfigSetCommandSuccess(t *testing.T) {
 	// Fire up test server
 	path := "/git/repos/me/repo-name/config-vars"
 	server := testutil.APIServer(t, "PATCH", path, gitConfigResponse, 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -148,9 +145,8 @@ func TestGitConfigUnsetCommandSuccess(t *testing.T) {
 	// Fire up test server
 	path := "/git/repos/me/repo-name/config-vars"
 	server := testutil.APIServer(t, "PATCH", path, gitConfigResponse, 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 

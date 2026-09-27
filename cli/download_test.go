@@ -36,6 +36,7 @@ func downloadVersionJSON(r *http.Request, id, pkg, ver, filename string) string 
 }
 
 func downloadHandler(t *testing.T) func(http.ResponseWriter, *http.Request) {
+	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
 		if a := r.Header.Get("Authorization"); a != "abc123" {
 			t.Errorf("Download should be authenticated, got %q", a)
@@ -57,9 +58,8 @@ func TestDownloadCommandSuccess(t *testing.T) {
 		})
 		mux.HandleFunc("/downloads/", downloadHandler(t))
 	})
-	defer server.Close()
 
-	cc := testContext(term, auth, server)
+	cc := testContext(t, term, auth, server)
 
 	// A trailing slash on a configured endpoint must be tolerated
 	ctx.GlobalFlags(cc).Endpoint = server.URL + "/"
@@ -95,9 +95,8 @@ func TestDownloadCommandForeignURL(t *testing.T) {
 			w.Write([]byte(v))
 		})
 	})
-	defer server.Close()
 
-	cc := testContext(term, auth, server)
+	cc := testContext(t, term, auth, server)
 	t.Chdir(t.TempDir())
 
 	err := runCommand(cc, []string{"beta", "download", "foo@1.2.3"})
@@ -115,7 +114,7 @@ func TestDownloadCommandInterrupted(t *testing.T) {
 	auth := terminal.TestAuther("user", "abc123", nil)
 	term := terminal.NewForTest()
 
-	cc, cancel := context.WithCancel(cli.TestContext(term, auth))
+	cc, cancel := context.WithCancel(cli.TestContext(t.Context(), term, auth))
 	defer cancel()
 
 	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
@@ -131,7 +130,6 @@ func TestDownloadCommandInterrupted(t *testing.T) {
 			<-r.Context().Done()
 		})
 	})
-	defer server.Close()
 
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
@@ -150,7 +148,6 @@ func TestDownloadCommandInterrupted(t *testing.T) {
 
 func TestDownloadCommandForbidden(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/packages/foo/versions/1.2.3", "", 403)
-	defer server.Close()
 	testCommandForbiddenResponse(t, []string{"beta", "download", "foo@1.2.3"}, server)
 }
 
@@ -176,9 +173,8 @@ func TestBackupCommandSuccess(t *testing.T) {
 			downloadHandler(t)(w, r)
 		})
 	})
-	defer server.Close()
 
-	cc := testContext(term, auth, server)
+	cc := testContext(t, term, auth, server)
 
 	dest := t.TempDir()
 	if err := runCommandNoErr(cc, []string{"beta", "backup", "--kind", "js", dest}); err != nil {
@@ -223,9 +219,8 @@ func TestDownloadCommandFailures(t *testing.T) {
 	term := terminal.NewForTest()
 
 	server := testutil.APIServer(t, "GET", "/packages/foo/versions/1.2.3", "", 404)
-	defer server.Close()
 
-	cc := testContext(term, auth, server)
+	cc := testContext(t, term, auth, server)
 	err := runCommand(cc, []string{"beta", "download", "no-version", "foo@1.2.3"})
 	expectSummaryError(t, err, api.ErrNotFound, "2 of 2 downloads failed")
 	expectProblems(t, term,

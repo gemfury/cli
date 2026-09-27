@@ -18,9 +18,8 @@ func TestWhoamiCommandSuccess(t *testing.T) {
 
 	// Fire up test server
 	server := testutil.APIServer(t, "GET", "/users/me", whoamiResponse, 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 

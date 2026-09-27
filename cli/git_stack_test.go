@@ -33,9 +33,8 @@ func TestGitStackCommandSuccess(t *testing.T) {
 
 	// Fire up test server with both repo info and stack listing
 	server := testGitStackServer(t)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -64,6 +63,7 @@ func TestGitStackCommandForbidden(t *testing.T) {
 }
 
 func testGitStackServer(t *testing.T) *httptest.Server {
+	t.Helper()
 	return testutil.APIServerCustom(t, func(mux *http.ServeMux) {
 		mux.HandleFunc("/git/repos/me/repo-name", func(w http.ResponseWriter, r *http.Request) {
 			t.Logf("API Request: %s %s", r.Method, r.URL.String())
@@ -85,9 +85,8 @@ func TestGitStackSetCommandSuccess(t *testing.T) {
 	// Fire up test server
 	path := "/git/repos/me/repo-name"
 	server := testutil.APIServer(t, "PATCH", path, "{}", 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 

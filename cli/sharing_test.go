@@ -33,9 +33,8 @@ func TestSharingCommandSuccess(t *testing.T) {
 	// Fire up test server
 	path := "/members"
 	server := testutil.APIServerPaginated(t, "GET", path, sharingResponses, 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -71,9 +70,8 @@ func TestSharingAddCommandSuccess(t *testing.T) {
 	// Fire up test server
 	path := "/collaborators/added@example.com"
 	server := testutil.APIServer(t, "PUT", path, "{}", 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -104,9 +102,8 @@ func TestSharingAddWithRoleCommandSuccess(t *testing.T) {
 			w.Write([]byte("{}"))
 		})
 	})
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -153,9 +150,8 @@ func TestSharingAddCommandPartialFailure(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		})
 	})
-	defer server.Close()
 
-	cc := testContext(term, auth, server)
+	cc := testContext(t, term, auth, server)
 	args := []string{"sharing", "add", "ok@example.com", "nobody@example.com", "fine@example.com"}
 	expectSummaryError(t, runCommand(cc, args), api.ErrNotFound, "1 of 3 invitations failed")
 
@@ -175,9 +171,8 @@ func TestSharingRemoveCommandSuccess(t *testing.T) {
 	// Fire up test server
 	path := "/collaborators/fired@example.com"
 	server := testutil.APIServer(t, "DELETE", path, "{}", 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -229,9 +224,8 @@ func TestAccountsCommandSuccess(t *testing.T) {
 	// Fire up test server
 	path := "/collaborations"
 	server := testutil.APIServerPaginated(t, "GET", path, accountsResponses, 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 

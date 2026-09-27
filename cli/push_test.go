@@ -12,8 +12,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -24,7 +24,7 @@ const pushResponse = `{}`
 func TestPushCommandSuccess(t *testing.T) {
 	auth := terminal.TestAuther("user", "abc123", nil)
 	term := terminal.NewForTest()
-	var publicVal string
+	var publicVal atomic.Value // Written by the server
 
 	// Fire up test server
 	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
@@ -35,7 +35,9 @@ func TestPushCommandSuccess(t *testing.T) {
 
 			err := r.ParseMultipartForm(1e6)
 			if err != nil || r.MultipartForm == nil {
-				t.Fatalf("ParseMultipartForm err: %s", err)
+				t.Errorf("ParseMultipartForm err: %v", err)
+				http.Error(w, "Bad form", http.StatusBadRequest)
+				return
 			}
 
 			mf := r.MultipartForm
@@ -44,18 +46,16 @@ func TestPushCommandSuccess(t *testing.T) {
 			}
 
 			if vv := mf.Value["public"]; len(vv) != 0 {
-				publicVal = vv[0]
+				publicVal.Store(vv[0])
 			} else {
-				publicVal = ""
+				publicVal.Store("")
 			}
 
 			w.Write([]byte(pushResponse))
 		})
 	})
 
-	defer server.Close()
-
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.PushEndpoint = server.URL
 	flags.Endpoint = server.URL
@@ -71,8 +71,8 @@ func TestPushCommandSuccess(t *testing.T) {
 	exp := fmt.Sprintf("Uploading %s - done", filepath.Base(packagePath))
 	if outStr := compactString(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
-	} else if publicVal != "" {
-		t.Errorf("Expected private, got %q", publicVal)
+	} else if v := publicVal.Load(); v != "" {
+		t.Errorf("Expected private, got %q", v)
 	}
 
 	// Regular push with "public"
@@ -84,8 +84,8 @@ func TestPushCommandSuccess(t *testing.T) {
 	exp = fmt.Sprintf("Uploading %s - done", filepath.Base(packagePath))
 	if outStr := compactString(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
-	} else if publicVal != "true" {
-		t.Errorf("Expected public, got %q", publicVal)
+	} else if v := publicVal.Load(); v != "true" {
+		t.Errorf("Expected public, got %q", v)
 	}
 }
 
@@ -101,9 +101,8 @@ func TestPushCommandForbidden(t *testing.T) {
 	term := terminal.NewForTest()
 
 	server := testutil.APIServer(t, "POST", "/uploads", "[]", 403)
-	defer server.Close()
 
-	cc := testContext(term, auth, server)
+	cc := testContext(t, term, auth, server)
 	args := []string{"push", samplePackagePath()}
 	if err := runCommand(cc, args); !errors.Is(err, api.ErrForbidden) {
 		t.Errorf("Command not forbidden, error: %s", err)
@@ -120,9 +119,8 @@ func TestPushCommandPartialFailure(t *testing.T) {
 	term := terminal.NewForTest()
 
 	server := testutil.APIServer(t, "POST", "/uploads", pushResponse, 200)
-	defer server.Close()
 
-	cc := testContext(term, auth, server)
+	cc := testContext(t, term, auth, server)
 
 	// One good file whose name contains a "%" (it must not be treated as a
 	// format verb by the --quiet status line), and one missing file
@@ -142,7 +140,7 @@ func TestPushCommandPartialFailure(t *testing.T) {
 		"Error: 1 of 2 uploads failed\n")
 }
 
+// Tests run in the directory of their package
 func samplePackagePath() string {
-	_, filename, _, _ := runtime.Caller(1)
-	return filepath.Join(filename, "../testdata/sample.txt")
+	return filepath.Join("testdata", "sample.txt")
 }

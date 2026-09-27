@@ -156,7 +156,7 @@ func browserLogin(cmd *cobra.Command) (*api.LoginResponse, error) {
 
 	// Attempt to open the browser to create CLI token
 	term.Printf("Opening %s\n", createResp.BrowserURL)
-	if ok := term.OpenBrowser(createResp.BrowserURL); !ok {
+	if ok := term.OpenBrowser(cc, createResp.BrowserURL); !ok {
 		term.Printf("Failed to open browser. You can continue CLI login by manually opening the URL\n")
 	}
 

@@ -9,6 +9,7 @@
 package browser
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"runtime"
@@ -42,10 +43,15 @@ func Commands() [][]string {
 }
 
 // Open tries to open url in a browser and reports whether it succeeded.
-func Open(url string) bool {
+// Cancelling ctx ends the attempt, but not a browser that is already open:
+// the commands are not bound to ctx, since they are to outlive this call.
+func Open(ctx context.Context, url string) bool {
 	for _, args := range Commands() {
+		if ctx.Err() != nil {
+			return false
+		}
 		cmd := exec.Command(args[0], append(args[1:], url)...)
-		if cmd.Start() == nil && appearsSuccessful(cmd, 3*time.Second) {
+		if cmd.Start() == nil && appearsSuccessful(ctx, cmd, 3*time.Second) {
 			return true
 		}
 	}
@@ -55,14 +61,20 @@ func Open(url string) bool {
 // appearsSuccessful reports whether the command appears to have run successfully.
 // If the command runs longer than the timeout, it's deemed successful.
 // If the command runs within the timeout, it's deemed successful if it exited cleanly.
-func appearsSuccessful(cmd *exec.Cmd, timeout time.Duration) bool {
+// If ctx is done before either, nothing is known of the command, which is no success.
+func appearsSuccessful(ctx context.Context, cmd *exec.Cmd, timeout time.Duration) bool {
 	errc := make(chan error, 1)
 	go func() {
 		errc <- cmd.Wait()
 	}()
 
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
 	select {
-	case <-time.After(timeout):
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
 		return true
 	case err := <-errc:
 		return err == nil

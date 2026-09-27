@@ -21,6 +21,7 @@ const loginResponse = `{
 		}`
 
 func APIServer(t *testing.T, method, path, resp string, code int) *httptest.Server {
+	t.Helper()
 	return APIServerCustom(t, func(mux *http.ServeMux) {
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 			t.Logf("API Request: %s %s", r.Method, r.URL.String())
@@ -39,6 +40,7 @@ func APIServer(t *testing.T, method, path, resp string, code int) *httptest.Serv
 // Allow responses to be paginated forward. Page param is just a string of "p" characters to
 // simplify implementation (without parsing), and prevent parsing page number as an integer
 func APIServerPaginated(t *testing.T, method, path string, resps []string, code int) *httptest.Server {
+	t.Helper()
 	return APIServerCustom(t, func(mux *http.ServeMux) {
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 			t.Logf("API Request: %s %s", r.Method, r.URL.String())
@@ -55,6 +57,7 @@ func APIServerPaginated(t *testing.T, method, path string, resps []string, code 
 }
 
 func APIPaginatedResponse(t *testing.T, w http.ResponseWriter, r *http.Request, resps []string, code int) {
+	t.Helper()
 	// Page from JSON body or query
 	pageReq := api.PaginationRequest{}
 	page := len(r.URL.Query().Get("page"))
@@ -89,7 +92,9 @@ func APIPaginatedResponse(t *testing.T, w http.ResponseWriter, r *http.Request, 
 	w.Write([]byte(resps[page]))
 }
 
+// APIServerCustom starts a test server that is closed at the end of the test
 func APIServerCustom(t *testing.T, custom func(*http.ServeMux)) *httptest.Server {
+	t.Helper()
 	h := http.NewServeMux()
 
 	// Add custom path handlers
@@ -106,7 +111,7 @@ func APIServerCustom(t *testing.T, custom func(*http.ServeMux)) *httptest.Server
   			  }`))
 			} else if m == "GET" {
 				if a := r.Header.Get("Authorization"); a != "Bearer xyz-123" {
-					t.Errorf("Incorrect Authorization: %q", m)
+					t.Errorf("Incorrect Authorization: %q", a)
 				}
 				w.Write([]byte(`{
   				  "user": { "email" : "u@example.com" },
@@ -122,6 +127,7 @@ func APIServerCustom(t *testing.T, custom func(*http.ServeMux)) *httptest.Server
 	h.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			w.WriteHeader(http.StatusNotImplemented)
+			return
 		}
 		w.Write([]byte(loginResponse))
 	})
@@ -134,7 +140,9 @@ func APIServerCustom(t *testing.T, custom func(*http.ServeMux)) *httptest.Server
 		})
 	}
 
-	return httptest.NewServer(h)
+	server := httptest.NewServer(h)
+	t.Cleanup(server.Close)
+	return server
 }
 
 func hasHandlerFor(h *http.ServeMux, method, path string) bool {

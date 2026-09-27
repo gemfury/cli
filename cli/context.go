@@ -14,7 +14,8 @@ func CommandContext() context.Context {
 	return ctx.CmdContextWith(context.Background(), term, auth)
 }
 
-// TestContext is the context for executing commands in testing
-func TestContext(t terminal.Terminal, a terminal.Auther) context.Context {
-	return ctx.CmdContextWith(context.Background(), t, a)
+// TestContext is the context for executing commands in testing,
+// derived from the parent context, such as the one of the test
+func TestContext(parent context.Context, t terminal.Terminal, a terminal.Auther) context.Context {
+	return ctx.CmdContextWith(parent, t, a)
 }

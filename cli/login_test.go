@@ -27,9 +27,8 @@ func TestLoginCommandSuccess(t *testing.T) {
 
 	// Fire up test server
 	server := testutil.APIServer(t, "GET", "/users/me", whoamiResponse, 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -53,9 +52,8 @@ func TestLoginCommandInteractive(t *testing.T) {
 
 	// Fire up test server
 	server := testutil.APIServer(t, "GET", "/users/me", whoamiResponse, 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -88,9 +86,8 @@ func TestLoginCommandInteractiveFallback(t *testing.T) {
 			w.Write([]byte(whoamiResponse))
 		})
 	})
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -127,9 +124,8 @@ func TestLoginCommandCancelled(t *testing.T) {
 					w.Write([]byte(`{"browser_url": "https://gemfury.com", "cli_url": "/cli/auth", "token": "xyz"}`))
 				})
 			})
-			defer server.Close()
 
-			cc := testContext(term, auth, server)
+			cc := testContext(t, term, auth, server)
 			term.InWrite([]byte{key})
 			if err := runCommandNoErr(cc, []string{"login"}); err != nil {
 				t.Error(err)
@@ -153,9 +149,8 @@ func TestCommandLoginCancelled(t *testing.T) {
 
 	// Only the default login handlers; reaching /packages fails the test
 	server := testutil.APIServerCustom(t, func(*http.ServeMux) {})
-	defer server.Close()
 
-	cc := testContext(term, auth, server)
+	cc := testContext(t, term, auth, server)
 	term.InWrite([]byte{0x03})
 	err := runCommand(cc, []string{"packages"})
 	if err == nil || err.Error() != "Login cancelled" {
@@ -182,9 +177,8 @@ func TestLoginCommandReplacesSavedToken(t *testing.T) {
 			w.Write([]byte(whoamiResponse))
 		})
 	})
-	defer server.Close()
 
-	cc := testContext(term, auth, server)
+	cc := testContext(t, term, auth, server)
 	term.InWrite([]byte("!"))
 	if err := runCommandNoErr(cc, []string{"login"}); err != nil {
 		t.Fatal(err)
@@ -217,9 +211,8 @@ func TestLoginCommandWithTokenFlagKeepsSaved(t *testing.T) {
 			w.Write([]byte(whoamiResponse))
 		})
 	})
-	defer server.Close()
 
-	cc := testContext(term, auth, server)
+	cc := testContext(t, term, auth, server)
 	if err := runCommandNoErr(cc, []string{"login", "--api-token", "flag-token"}); err != nil {
 		t.Fatal(err)
 	}
@@ -255,13 +248,12 @@ func TestLogoutCommandSuccess(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		})
 	})
-	defer server.Close()
 
 	term.SetPromptResponses(map[string]string{
 		"Are you sure you want to logout? [y/N]": "Y",
 	})
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -296,14 +288,13 @@ func TestLogoutCommandRevokeFails(t *testing.T) {
 			term := terminal.NewForTest()
 
 			server := testutil.APIServer(t, "POST", "/logout", "", 500)
-			defer server.Close()
 
 			term.SetPromptResponses(map[string]string{
 				"Are you sure you want to logout? [y/N]":                      "Y",
 				"Do you want to remove credentials from .netrc anyway? [y/N]": tc.answer,
 			})
 
-			cc := testContext(term, auth, server)
+			cc := testContext(t, term, auth, server)
 			err := runCommand(cc, []string{"logout"})
 			if (err != nil) != tc.finalErr {
 				t.Errorf("Expected error=%v, got: %v", tc.finalErr, err)
@@ -328,9 +319,8 @@ func TestLogoutCommandWithTokenFlag(t *testing.T) {
 
 	// Any request would be a wrongful revocation
 	server := offlineServer(t)
-	defer server.Close()
 
-	cc := testContext(term, auth, server)
+	cc := testContext(t, term, auth, server)
 	err := runCommand(cc, []string{"logout", "--api-token", "other"})
 	if !cli.IsUsageError(err) {
 		t.Fatalf("Expected usage error, got: %v", err)
@@ -347,13 +337,12 @@ func TestLogoutCommandAbort(t *testing.T) {
 
 	// Fire up test server (should not be called)
 	server := testutil.APIServer(t, "GET", "/", "", 200)
-	defer server.Close()
 
 	term.SetPromptResponses(map[string]string{
 		"Are you sure you want to logout? [y/N]": "ABORT",
 	})
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -393,11 +382,10 @@ func TestLoginCommandInterrupted(t *testing.T) {
 	auth := terminal.TestAuther("", "", nil)
 	term := terminal.NewForTest()
 
-	cc, cancel := context.WithCancel(cli.TestContext(term, auth))
+	cc, cancel := context.WithCancel(cli.TestContext(t.Context(), term, auth))
 	defer cancel()
 
 	server := pendingLoginServer(t, cancel)
-	defer server.Close()
 
 	ctx.GlobalFlags(cc).Endpoint = server.URL
 	term.InWrite([]byte("!"))
@@ -425,10 +413,9 @@ func TestLoginCommandTimeout(t *testing.T) {
 	term := terminal.NewForTest()
 
 	server := pendingLoginServer(t, func() {})
-	defer server.Close()
 
 	cli.SetLoginPollTimeout(t, 100*time.Millisecond)
-	cc := testContext(term, auth, server)
+	cc := testContext(t, term, auth, server)
 	term.InWrite([]byte("!"))
 
 	err := runCommand(cc, []string{"login"})

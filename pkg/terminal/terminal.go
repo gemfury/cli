@@ -4,6 +4,7 @@ import (
 	"github.com/gemfury/cli/pkg/browser"
 	"github.com/manifoldco/promptui"
 
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -14,7 +15,7 @@ type Terminal interface {
 	RunPrompt(*promptui.Prompt) (string, error)
 	Printf(string, ...any) (int, error)
 	Println(a ...any) (n int, err error)
-	OpenBrowser(string) bool
+	OpenBrowser(context.Context, string) bool
 	IOIn() io.ReadCloser
 	IOErr() io.Writer
 	IOOut() io.Writer
@@ -60,6 +61,6 @@ func (t term) RunPrompt(p *promptui.Prompt) (string, error) {
 	return p.Run()
 }
 
-func (t term) OpenBrowser(url string) bool {
-	return browser.Open(url)
+func (t term) OpenBrowser(ctx context.Context, url string) bool {
+	return browser.Open(ctx, url)
 }

@@ -4,6 +4,7 @@ import (
 	"github.com/manifoldco/promptui"
 
 	"bytes"
+	"context"
 	"io"
 )
 
@@ -55,7 +56,7 @@ func (tt *testTerm) StartProgress(int64, string) Progress {
 }
 
 // Fail to open browser progress bar
-func (tt *testTerm) OpenBrowser(string) bool {
+func (tt *testTerm) OpenBrowser(context.Context, string) bool {
 	return false
 }
 

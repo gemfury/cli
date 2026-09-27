@@ -38,9 +38,8 @@ func TestPackagesCommandSuccess(t *testing.T) {
 	// Fire up test server
 	path := "/packages"
 	server := testutil.APIServerPaginated(t, "GET", path, packagesResponses, 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -99,9 +98,8 @@ func TestVersionsCommandSuccess(t *testing.T) {
 	// Fire up test server
 	path := "/packages/pkg-name/versions"
 	server := testutil.APIServerPaginated(t, "GET", path, versionsResponses, 200)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -122,9 +120,8 @@ func TestVersionsCommandEmpty(t *testing.T) {
 
 	path := "/packages/pkg-name/versions"
 	server := testutil.APIServer(t, "GET", path, "[]", 200)
-	defer server.Close()
 
-	cc := testContext(term, auth, server)
+	cc := testContext(t, term, auth, server)
 	if err := runCommand(cc, []string{"versions", "pkg-name"}); err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +154,7 @@ func TestPackagesCommandCancelled(t *testing.T) {
 	auth := terminal.TestAuther("user", "abc123", nil)
 	term := terminal.NewForTest()
 
-	cc, cancel := context.WithCancel(cli.TestContext(term, auth))
+	cc, cancel := context.WithCancel(cli.TestContext(t.Context(), term, auth))
 	defer cancel()
 
 	var requests atomic.Int32
@@ -168,7 +165,6 @@ func TestPackagesCommandCancelled(t *testing.T) {
 			testutil.APIPaginatedResponse(t, w, r, packagesResponses, 200)
 		})
 	})
-	defer server.Close()
 
 	ctx.GlobalFlags(cc).Endpoint = server.URL
 
@@ -191,7 +187,7 @@ func TestCommandInvalidEndpoint(t *testing.T) {
 	} {
 		t.Run(args[0], func(t *testing.T) {
 			auth := terminal.TestAuther("user", "abc123", nil)
-			cc := cli.TestContext(terminal.NewForTest(), auth)
+			cc := cli.TestContext(t.Context(), terminal.NewForTest(), auth)
 
 			flags := ctx.GlobalFlags(cc)
 			flags.PushEndpoint = "://invalid"

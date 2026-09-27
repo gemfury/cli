@@ -34,9 +34,8 @@ func TestRootCommand(t *testing.T) {
 
 	// Fire up test server (error on everything)
 	server := testutil.APIServer(t, "", "/", "", 501)
-	defer server.Close()
 
-	cc := cli.TestContext(term, auth)
+	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
 	flags.Endpoint = server.URL
 
@@ -70,8 +69,9 @@ func runCommandNoErr(cc context.Context, args []string) error {
 }
 
 // testContext builds a command context with both API endpoints pointed at server
-func testContext(term terminal.Terminal, auth terminal.Auther, server *httptest.Server, opts ...testOption) context.Context {
-	cc := cli.TestContext(term, auth)
+func testContext(t *testing.T, term terminal.Terminal, auth terminal.Auther, server *httptest.Server, opts ...testOption) context.Context {
+	t.Helper()
+	cc := cli.TestContext(t.Context(), term, auth)
 	for _, opt := range opts {
 		cc = opt(cc)
 	}
@@ -129,6 +129,7 @@ func expectOutputLines(t *testing.T, term terminal.TestTerm, marker string, line
 // suppresses testutil's default browser-login handler, so a command that
 // wrongly attempts login fails loudly instead of quietly succeeding.
 func offlineServer(t *testing.T) *httptest.Server {
+	t.Helper()
 	return testutil.APIServerCustom(t, func(mux *http.ServeMux) {
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			t.Errorf("Unexpected API request: %s %s", r.Method, r.URL)
@@ -139,9 +140,10 @@ func offlineServer(t *testing.T) *httptest.Server {
 
 // We first test with manual (prompt) login, and then test with "--api-token" flag
 func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Server, opts ...testOption) {
+	t.Helper()
 	auth := terminal.TestAuther("", "", nil)
 	term := terminal.NewForTest()
-	cc := testContext(term, auth, server, opts...)
+	cc := testContext(t, term, auth, server, opts...)
 
 	// Prepare for browser login prompt
 	term.InWrite([]byte("!"))
@@ -161,7 +163,7 @@ func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Serv
 	// Testing with "--api-token" should skip calling Auth() on TestAuther.
 	// The context options only shape the logged-out run above.
 	auth = terminal.TestAuther("", "", errors.New("TestAuther should not be called"))
-	cc = testContext(term, auth, server)
+	cc = testContext(t, term, auth, server)
 
 	args = append(args, "--api-token", "abc123")
 	if err := runCommand(cc, args); err != nil {
@@ -170,9 +172,10 @@ func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Serv
 }
 
 func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.Server, opts ...testOption) {
+	t.Helper()
 	auth := terminal.TestAuther("user", "abc123", nil)
 	term := terminal.NewForTest()
-	cc := testContext(term, auth, server, opts...)
+	cc := testContext(t, term, auth, server, opts...)
 
 	err := runCommand(cc, args)
 	if !errors.Is(err, api.ErrForbidden) {
@@ -195,10 +198,9 @@ func TestHelpWithoutAuth(t *testing.T) {
 	for _, args := range [][]string{{"help"}, {"help", "push"}, {"git", "--help"}} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			server := offlineServer(t)
-			defer server.Close()
 
 			term := terminal.NewForTest()
-			cc := testContext(term, terminal.TestAuther("", "", nil), server)
+			cc := testContext(t, term, terminal.TestAuther("", "", nil), server)
 			if err := runCommandNoErr(cc, args); err != nil {
 				t.Error(err)
 			}
@@ -237,10 +239,9 @@ func TestUsageErrorOutput(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
 			server := offlineServer(t)
-			defer server.Close()
 
 			term := terminal.NewForTest()
-			cc := testContext(term, terminal.TestAuther("", "", nil), server)
+			cc := testContext(t, term, terminal.TestAuther("", "", nil), server)
 
 			err := runCommand(cc, tc.args)
 			if !cli.IsUsageError(err) {
@@ -259,7 +260,7 @@ func TestUsageErrorOutput(t *testing.T) {
 
 // Without Args, Cobra lets a subcommand silently ignore extra arguments
 func TestRunnableCommandsDeclareArgs(t *testing.T) {
-	cc := cli.TestContext(terminal.NewForTest(), terminal.TestAuther("", "", nil))
+	cc := cli.TestContext(t.Context(), terminal.NewForTest(), terminal.TestAuther("", "", nil))
 
 	var check func(cmd *cobra.Command)
 	check = func(cmd *cobra.Command) {
@@ -275,10 +276,9 @@ func TestRunnableCommandsDeclareArgs(t *testing.T) {
 
 func TestUnknownCommandOutput(t *testing.T) {
 	server := offlineServer(t)
-	defer server.Close()
 
 	term := terminal.NewForTest()
-	cc := testContext(term, terminal.TestAuther("", "", nil), server)
+	cc := testContext(t, term, terminal.TestAuther("", "", nil), server)
 	if err := runCommand(cc, []string{"nosuchcmd"}); err == nil {
 		t.Fatal("Expected error for unknown command")
 	}
