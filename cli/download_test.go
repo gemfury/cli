@@ -8,7 +8,9 @@ import (
 
 	"crypto/sha512"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -101,7 +103,7 @@ func TestDownloadCommandForeignURL(t *testing.T) {
 		t.Fatalf("Expected foreign URL error, got: %v", err)
 	}
 
-	if _, err := os.Stat("foo-1.2.3.tgz"); !os.IsNotExist(err) {
+	if _, err := os.Stat("foo-1.2.3.tgz"); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("No file should be written for a refused download")
 	}
 }

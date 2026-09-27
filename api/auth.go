@@ -53,6 +53,10 @@ type LoginCreateResponse struct {
 // LoginGet waits for browser login and retrieves its results (token & user information)
 func (c *Client) LoginGet(cc context.Context, create *LoginCreateResponse) (*LoginGetResponse, error) {
 	req := c.newRequest(cc, "GET", create.CLIURL, false)
+	if req.err != nil {
+		return nil, req.err
+	}
+
 	req.Header.Set("Authorization", "Bearer "+create.Token)
 	resp := &LoginGetResponse{}
 	err := req.doJSON(resp)

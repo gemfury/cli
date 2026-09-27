@@ -11,7 +11,9 @@ func (c *Client) GitList(cc context.Context, body *PaginationRequest) (*GitRepos
 	req := c.newRequest(cc, "GET", "/git/repos/{acct}", false)
 
 	if body != nil {
-		c.prepareJSONBody(req, body)
+		if err := c.prepareJSONBody(req, body); err != nil {
+			return nil, err
+		}
 	}
 
 	resp := GitReposResponse{}

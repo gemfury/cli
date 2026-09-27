@@ -26,7 +26,9 @@ func (c *Client) Members(cc context.Context, body *PaginationRequest) (*MembersR
 	req := c.newRequest(cc, "GET", "/members", true)
 
 	if body != nil {
-		c.prepareJSONBody(req, body)
+		if err := c.prepareJSONBody(req, body); err != nil {
+			return nil, err
+		}
 	}
 
 	resp := MembersResponse{}
@@ -41,7 +43,9 @@ func (c *Client) Collaborations(cc context.Context, body *PaginationRequest) (*M
 	req := c.newRequest(cc, "GET", "/collaborations", true)
 
 	if body != nil {
-		c.prepareJSONBody(req, body)
+		if err := c.prepareJSONBody(req, body); err != nil {
+			return nil, err
+		}
 	}
 
 	resp := MembersResponse{}

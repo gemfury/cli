@@ -40,6 +40,8 @@ type GitConfigPair struct {
 func (c *Client) GitConfigSet(cc context.Context, repo string, vars map[string]*string) error {
 	path := "/git/repos/{acct}/" + url.PathEscape(repo) + "/config-vars"
 	req := c.newRequest(cc, "PATCH", path, false)
-	c.prepareJSONBody(req, &gitConfigJSON{vars})
+	if err := c.prepareJSONBody(req, &gitConfigJSON{vars}); err != nil {
+		return err
+	}
 	return req.doJSON(nil)
 }

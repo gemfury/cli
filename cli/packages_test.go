@@ -5,7 +5,12 @@ import (
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/internal/testutil"
 	"github.com/gemfury/cli/pkg/terminal"
+
+	"context"
+	"errors"
+	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -145,4 +150,56 @@ func TestVersionsCommandForbidden(t *testing.T) {
 // Reduce multi-spaces to a single space for easier comparison
 func compactString(b []byte) string {
 	return strings.Join(strings.Fields(string(b)), " ")
+}
+
+// A listing interrupted between pages is incomplete, so it must fail
+func TestPackagesCommandCancelled(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	cc, cancel := context.WithCancel(cli.TestContext(term, auth))
+	defer cancel()
+
+	var requests atomic.Int32
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/packages", func(w http.ResponseWriter, r *http.Request) {
+			requests.Add(1)
+			cancel() // Interrupted while the first page is in flight
+			testutil.APIPaginatedResponse(t, w, r, packagesResponses, 200)
+		})
+	})
+	defer server.Close()
+
+	ctx.GlobalFlags(cc).Endpoint = server.URL
+
+	err := runCommand(cc, []string{"packages"})
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Expected context.Canceled, got: %v", err)
+	}
+
+	if n := requests.Load(); n != 1 {
+		t.Errorf("Expected 1 request before cancellation, got %d", n)
+	}
+}
+
+// An unusable endpoint is reported as an error by every kind of request
+func TestCommandInvalidEndpoint(t *testing.T) {
+	for _, args := range [][]string{
+		{"packages"},
+		{"push", samplePackagePath()},
+		{"git", "config", "set", "repo", "A=1"},
+	} {
+		t.Run(args[0], func(t *testing.T) {
+			auth := terminal.TestAuther("user", "abc123", nil)
+			cc := cli.TestContext(terminal.NewForTest(), auth)
+
+			flags := ctx.GlobalFlags(cc)
+			flags.PushEndpoint = "://invalid"
+			flags.Endpoint = "://invalid"
+
+			if err := runCommand(cc, args); err == nil {
+				t.Error("Expected an error for an invalid endpoint")
+			}
+		})
+	}
 }

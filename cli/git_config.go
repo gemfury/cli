@@ -4,11 +4,12 @@ import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/spf13/cobra"
-	"sort"
 	"strings"
 	"text/tabwriter"
 
+	"cmp"
 	"fmt"
+	"slices"
 )
 
 // NewCmdGitConfig is the root for Git Config
@@ -57,20 +58,15 @@ func filteredGitConfig(cmd *cobra.Command, args []string) error {
 	if keys := args[1:]; len(keys) > 0 {
 		filteredConfig = make([]api.GitConfigPair, 0, len(keys))
 		for _, c := range config {
-			for _, k := range keys {
-				if c.Key == k {
-					filteredConfig = append(filteredConfig, c)
-					break
-				}
+			if slices.Contains(keys, c.Key) {
+				filteredConfig = append(filteredConfig, c)
 			}
 		}
 	}
 
-	if len(filteredConfig) > 0 {
-		sort.Slice(filteredConfig, func(i, j int) bool {
-			return filteredConfig[i].Key < filteredConfig[j].Key
-		})
-	}
+	slices.SortFunc(filteredConfig, func(a, b api.GitConfigPair) int {
+		return cmp.Compare(a.Key, b.Key)
+	})
 
 	term.Printf("\n*** GIT CONFIG ***\n\n")
 	w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)

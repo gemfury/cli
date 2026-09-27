@@ -160,7 +160,7 @@ func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Serv
 
 	// Testing with "--api-token" should skip calling Auth() on TestAuther.
 	// The context options only shape the logged-out run above.
-	auth = terminal.TestAuther("", "", fmt.Errorf("TestAuther should not be called"))
+	auth = terminal.TestAuther("", "", errors.New("TestAuther should not be called"))
 	cc = testContext(term, auth, server)
 
 	args = append(args, "--api-token", "abc123")

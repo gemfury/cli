@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -48,7 +49,11 @@ func NewCmdPush() *cobra.Command {
 						term.Printf("%s", prefix)
 						prefix = ""
 					} else {
-						stat, _ := file.Stat()
+						stat, err := file.Stat()
+						if err != nil {
+							return err
+						}
+
 						bar := term.StartProgress(stat.Size(), prefix)
 						reader = bar.NewProxyReader(file)
 						defer bar.Finish()
@@ -63,13 +68,13 @@ func NewCmdPush() *cobra.Command {
 				}
 
 				fails.record(err) // Reported by the status line below
-				if os.IsNotExist(err) {
+				if errors.Is(err, fs.ErrNotExist) {
 					term.Printf("%s- file not found\n", prefix)
 				} else if errors.Is(err, api.ErrUnauthorized) {
 					term.Printf("%s- unauthorized\n", prefix)
 				} else if errors.Is(err, api.ErrForbidden) {
 					term.Printf("%s- no permission\n", prefix)
-				} else if ue, ok := err.(api.UserError); ok {
+				} else if ue := (api.UserError{}); errors.As(err, &ue) {
 					term.Printf("%s- %s\n", prefix, ue.ShortError())
 				} else {
 					term.Printf("%s- error %q\n", prefix, err.Error())

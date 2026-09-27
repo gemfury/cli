@@ -142,7 +142,12 @@ func iterateAll(cc context.Context, showSpinner bool, fn func(req *api.Paginatio
 			pageReq.Page = pageResp.NextPageCursor()
 		}
 
-		if pageReq.Page == "" || cc.Err() != nil {
+		// A cancelled listing is incomplete, and must not pass for success
+		if err := cc.Err(); err != nil {
+			return err
+		}
+
+		if pageReq.Page == "" {
 			break
 		}
 

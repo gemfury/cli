@@ -10,7 +10,6 @@ import (
 
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 )
@@ -143,7 +142,7 @@ func browserLogin(cmd *cobra.Command) (*api.LoginResponse, error) {
 	if err != nil {
 		return nil, err
 	} else if createResp.BrowserURL == "" {
-		return nil, fmt.Errorf("Internal error")
+		return nil, errors.New("Internal error")
 	}
 
 	// Everything is ready. Confirm opening browser to login

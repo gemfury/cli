@@ -9,16 +9,18 @@ import (
 
 	"context"
 	"crypto/sha512"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
 var (
-	backupSkip = fmt.Errorf("Skip file")
+	backupSkip = errors.New("Skip file")
 )
 
 // NewCmdBeta creates a Cobra command for "beta"
@@ -66,7 +68,7 @@ func downloadVersions(cmd *cobra.Command, args []string) error {
 func downloadArg(cc context.Context, c *api.Client, arg string) error {
 	at := strings.LastIndex(arg, "@")
 	if at <= 0 {
-		return fmt.Errorf("Argument format: PACKAGE@VERSION")
+		return errors.New("Argument format: PACKAGE@VERSION")
 	}
 	pkg, ver := arg[0:at], arg[at+1:]
 
@@ -101,10 +103,12 @@ func NewCmdBackup() *cobra.Command {
 func backupEverything(cmd *cobra.Command, args []string, kindFlag string) error {
 	// Verify destination directory
 	destDir := filepath.Clean(args[0])
-	if s, err := os.Stat(destDir); os.IsNotExist(err) {
-		return fmt.Errorf("This directory doesn't exist")
+	if s, err := os.Stat(destDir); errors.Is(err, fs.ErrNotExist) {
+		return errors.New("This directory doesn't exist")
+	} else if err != nil {
+		return err
 	} else if !s.IsDir() {
-		return fmt.Errorf("This is not a directory")
+		return errors.New("This is not a directory")
 	}
 
 	// Fire up the API
@@ -157,11 +161,13 @@ func downloadVersion(cc context.Context, client *api.Client, v *api.Version, des
 	}
 
 	// Verify or create package directory
-	if s, err := os.Stat(pkgDir); os.IsNotExist(err) {
+	if s, err := os.Stat(pkgDir); errors.Is(err, fs.ErrNotExist) {
 		if err := os.MkdirAll(pkgDir, 0700); err != nil {
 			return err
 		}
-	} else if err != nil || !s.IsDir() {
+	} else if err != nil {
+		return fmt.Errorf("Problem creating directory %q: %w", pkgDir, err)
+	} else if !s.IsDir() {
 		return fmt.Errorf("Problem creating directory %q", pkgDir)
 	}
 
@@ -211,7 +217,7 @@ func downloadVersion(cc context.Context, client *api.Client, v *api.Version, des
 // Validate checksum for file
 func backupCheckPath(term terminal.Terminal, v *api.Version, path string, status func(string) string) error {
 	// Check if file exists, and validate checksum if it does
-	if s, err := os.Stat(path); os.IsNotExist(err) {
+	if s, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return nil
 	} else if err != nil {
 		return err
@@ -235,7 +241,7 @@ func backupCheckPath(term terminal.Terminal, v *api.Version, path string, status
 		return err
 	}
 
-	sum := fmt.Sprintf("%x", hash.Sum(nil))
+	sum := hex.EncodeToString(hash.Sum(nil))
 	if exp := v.Digests.SHA512; exp != sum {
 		term.Printf("%s (CHECKSUM MISMATCH)\n", status("❌"))
 		prompt := promptui.Prompt{
@@ -252,7 +258,7 @@ func backupCheckPath(term terminal.Terminal, v *api.Version, path string, status
 			return nil
 		}
 
-		return fmt.Errorf("Checksum failed")
+		return errors.New("Checksum failed")
 	}
 
 	term.Println(status("✅"))

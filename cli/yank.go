@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"context"
-	"fmt"
+	"errors"
 	"net/url"
 	"strings"
 )
@@ -94,7 +94,7 @@ func lookupVersions(cc context.Context, c *api.Client, arg, versionFlag string) 
 	}
 
 	if pkg == "" || ver == "" {
-		return nil, fmt.Errorf("Invalid package/version specified")
+		return nil, errors.New("Invalid package/version specified")
 	}
 
 	return filterVersions(cc, c, pkg, ver)
@@ -104,12 +104,12 @@ func filterVersions(cc context.Context, c *api.Client, pkg, ver string) ([]*api.
 	versions := []*api.Version{}
 
 	// Default search filters for listed versions
-	filter := url.Values(map[string][]string{"name": {pkg}, "version": {ver}})
+	filter := url.Values{"name": {pkg}, "version": {ver}}
 
 	// Extract "kind:" from package name, if present
-	if at := strings.Index(pkg, ":"); at > 0 {
-		filter["name"] = []string{pkg[at+1:]}
-		filter["kind"] = []string{pkg[0:at]}
+	if kind, name, ok := strings.Cut(pkg, ":"); ok && kind != "" {
+		filter["name"] = []string{name}
+		filter["kind"] = []string{kind}
 	}
 
 	// Paginate over package listings until no more pages

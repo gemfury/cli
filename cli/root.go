@@ -29,7 +29,7 @@ func NewRootCommand(cc context.Context) *cobra.Command {
 
 	// Flag parsing failures are usage errors
 	rootCmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
-		return usageErrorf("%s", err)
+		return asUsageError(err)
 	})
 
 	// Ensure authentication for all commands (see skipsAuth for exceptions)
@@ -95,7 +95,6 @@ func globalFlagNormalization(f *pflag.FlagSet, name string) pflag.NormalizedName
 	switch name {
 	case "as":
 		name = "account"
-		break
 	}
 
 	return pflag.NormalizedName(name)

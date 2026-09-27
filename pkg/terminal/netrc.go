@@ -4,7 +4,9 @@ import (
 	"github.com/bgentry/go-netrc/netrc"
 
 	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -38,7 +40,7 @@ func (n nrc) Auth() (string, string, error) {
 	// Load up the netrc file. ParseFile uses os.Open
 	// And will return *PathError if it's not readable
 	net, err := netrc.ParseFile(path)
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return "", "", nil
 	} else if err != nil {
 		return "", "", fmt.Errorf("Error reading .netrc file %q: %w", path, err)
@@ -76,7 +78,7 @@ func netrcUpdate(update func(net *netrc.Netrc)) error {
 
 	// Load or create .netrc file
 	net, err := netrc.ParseFile(path)
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		net, _ = netrc.Parse(bytes.NewReader(nil))
 	} else if err != nil {
 		return fmt.Errorf("Error reading .netrc %q: %w", path, err)

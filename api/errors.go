@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 )
 
@@ -76,7 +77,10 @@ func StatusCodeToError(s int) error {
 	case s >= 500:
 		return ErrFuryServer
 	default:
-		return errors.New(http.StatusText(s))
+		if text := http.StatusText(s); text != "" {
+			return errors.New(text)
+		}
+		return fmt.Errorf("HTTP %d", s)
 	}
 }
 

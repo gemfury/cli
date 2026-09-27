@@ -5,7 +5,6 @@ import (
 	"github.com/gemfury/cli/cli"
 
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -37,8 +36,7 @@ func main() {
 // Some special-casing is based on Cobra's arg processing
 // TODO: This could be moved to Ruby CLI as a wrapper
 func convertLegacyArgs(args []string) []string {
-
-	if len(args) < 2 || filepath.Base(args[0]) == "cobra.test" {
+	if len(args) < 2 {
 		return nil
 	}
 

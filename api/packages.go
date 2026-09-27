@@ -11,7 +11,9 @@ func (c *Client) Packages(cc context.Context, body *PaginationRequest) (*Package
 	req := c.newRequest(cc, "GET", "/packages", true)
 
 	if body != nil {
-		c.prepareJSONBody(req, body)
+		if err := c.prepareJSONBody(req, body); err != nil {
+			return nil, err
+		}
 	}
 
 	resp := PackagesResponse{}
@@ -26,7 +28,9 @@ func (c *Client) PackageVersions(cc context.Context, pkg string, body *Paginatio
 	req := c.newRequest(cc, "GET", "/packages/"+url.PathEscape(pkg)+"/versions?expand=package", true)
 
 	if body != nil {
-		c.prepareJSONBody(req, body)
+		if err := c.prepareJSONBody(req, body); err != nil {
+			return nil, err
+		}
 	}
 
 	resp := VersionsResponse{}
@@ -41,7 +45,9 @@ func (c *Client) Versions(cc context.Context, filter url.Values, body *Paginatio
 	req := c.newRequest(cc, "GET", "/versions?expand=package&"+filter.Encode(), true)
 
 	if body != nil {
-		c.prepareJSONBody(req, body)
+		if err := c.prepareJSONBody(req, body); err != nil {
+			return nil, err
+		}
 	}
 
 	resp := VersionsResponse{}

@@ -10,11 +10,6 @@ import (
 	"fmt"
 )
 
-// Machines for Gemfury in .netrc file
-var (
-	netrcMachines = []string{"api.fury.io", "git.fury.io"}
-)
-
 // NewCmdLogout invalidates session and wipes credentials
 func NewCmdLogout() *cobra.Command {
 	logoutCmd := &cobra.Command{

@@ -6,15 +6,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 )
 
-var (
+const (
 	// Default "Accept" header for Gemfury API requests
 	hdrAcceptAPIv1 = "application/vnd.fury.v1"
 
@@ -25,6 +26,11 @@ var (
 	defaultPushEndpoint = "https://push.fury.io"
 	defaultEndpoint     = "https://api.fury.io"
 
+	// Most of an unread response body to read, so as to reuse its connection
+	maxDrainBytes = 64 << 10
+)
+
+var (
 	// DefaultConduit is a wrapper for http.DefaultClient
 	DefaultConduit = &conduitStandard{
 		Client:  http.DefaultClient,
@@ -61,7 +67,10 @@ func (c *Client) newPushRequest(cc context.Context, method, rawPath string, impe
 }
 
 func (c *Client) makeRequest(cc context.Context, method, base, rawPath string, impersonate bool) *request {
-	baseURL, _ := url.Parse(base)
+	baseURL, err := url.Parse(base)
+	if err != nil {
+		return &request{err: err}
+	}
 
 	// Render URI Templates (RFC6570) to populate {acct}, etc
 	reqURL, err := c.renderURITemplate(baseURL.String() + rawPath)
@@ -91,7 +100,11 @@ func (c *Client) makeRequest(cc context.Context, method, base, rawPath string, i
 }
 
 // Populate API request body as JSON with the proper Content-Type header
-func (c *Client) prepareJSONBody(req *request, data interface{}) error {
+func (c *Client) prepareJSONBody(req *request, data any) error {
+	if req.err != nil {
+		return req.err
+	}
+
 	body, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -134,14 +147,14 @@ func (r *request) doCommon() (*http.Response, error) {
 	}
 
 	resp, err := r.conduit.Do(r.Request)
-	if os.IsTimeout(err) {
+	if ne := net.Error(nil); errors.As(err, &ne) && ne.Timeout() {
 		return resp, ErrTimeout
 	} else if err != nil {
 		return resp, err
 	}
 
 	if err := DecodeResponseError(resp); err != nil {
-		resp.Body.Close()
+		drainAndClose(resp.Body)
 		return resp, err
 	}
 
@@ -149,20 +162,20 @@ func (r *request) doCommon() (*http.Response, error) {
 }
 
 // Fetch and decode JSON from Gemfury with Authentication, returns error
-func (r *request) doJSON(data interface{}) error {
+func (r *request) doJSON(data any) error {
 	_, err := r.doPaginatedJSON(data)
 	return err
 }
 
 // Fetch and decode JSON from Gemfury with Authentication, returns pagination and error
-func (r *request) doPaginatedJSON(data interface{}) (*PaginationResponse, error) {
+func (r *request) doPaginatedJSON(data any) (*PaginationResponse, error) {
 	resp, err := r.doCommon()
 	if err != nil {
 		r.err = err
 		return nil, err
 	}
 
-	defer resp.Body.Close()
+	defer drainAndClose(resp.Body)
 
 	// Parse pagination headers
 	pagination := parsePagination(resp)
@@ -175,6 +188,12 @@ func (r *request) doPaginatedJSON(data interface{}) (*PaginationResponse, error)
 	// Decode body JSON into provided data structure
 	r.err = json.NewDecoder(resp.Body).Decode(data)
 	return pagination, r.err
+}
+
+// A connection is reused only if the body of its response was read to the end
+func drainAndClose(body io.ReadCloser) {
+	io.CopyN(io.Discard, body, maxDrainBytes)
+	body.Close()
 }
 
 // Create Gemfury API request, and then stream output
@@ -202,8 +221,8 @@ type conduitStandard struct {
 	*http.Client
 }
 
-func (c *conduitStandard) NewRequest(cc context.Context, url, method string, body io.Reader) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(cc, url, method, body)
+func (c *conduitStandard) NewRequest(cc context.Context, method, rawURL string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(cc, method, rawURL, body)
 	if err != nil {
 		return req, err
 	}

@@ -12,8 +12,8 @@ import (
 type Terminal interface {
 	StartProgress(int64, string) Progress
 	RunPrompt(*promptui.Prompt) (string, error)
-	Printf(string, ...interface{}) (int, error)
-	Println(a ...interface{}) (n int, err error)
+	Printf(string, ...any) (int, error)
+	Println(a ...any) (n int, err error)
 	OpenBrowser(string) bool
 	IOIn() io.ReadCloser
 	IOErr() io.Writer
@@ -34,11 +34,11 @@ type term struct {
 	ioIn  io.ReadCloser
 }
 
-func (t term) Printf(f string, a ...interface{}) (int, error) {
+func (t term) Printf(f string, a ...any) (int, error) {
 	return fmt.Fprintf(t.ioOut, f, a...)
 }
 
-func (t term) Println(a ...interface{}) (int, error) {
+func (t term) Println(a ...any) (int, error) {
 	return fmt.Fprintln(t.ioOut, a...)
 }
 

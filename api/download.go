@@ -18,7 +18,9 @@ func (c *Client) DumpVersions(cc context.Context, body *PaginationRequest, kindF
 	req := c.newRequest(cc, "GET", path, true)
 
 	if body != nil {
-		c.prepareJSONBody(req, body)
+		if err := c.prepareJSONBody(req, body); err != nil {
+			return nil, err
+		}
 	}
 
 	resp := VersionsResponse{}

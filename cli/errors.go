@@ -12,15 +12,25 @@ import (
 // The command's usage text is printed alongside these errors.
 type usageError struct {
 	msg string
+	err error // Cause, if any
 }
 
 func (e *usageError) Error() string {
 	return e.msg
 }
 
+func (e *usageError) Unwrap() error {
+	return e.err
+}
+
 // usageErrorf creates a usageError with a formatted message
-func usageErrorf(format string, a ...interface{}) error {
+func usageErrorf(format string, a ...any) error {
 	return &usageError{msg: fmt.Sprintf(format, a...)}
+}
+
+// asUsageError makes a usageError of err, which remains its cause
+func asUsageError(err error) error {
+	return &usageError{msg: err.Error(), err: err}
 }
 
 // IsUsageError reports whether err (or any error it wraps) is a usageError
@@ -43,7 +53,7 @@ func usageArgs(check cobra.PositionalArgs, msg string) cobra.PositionalArgs {
 // noArgs rejects any positional argument as a usage error
 func noArgs(cmd *cobra.Command, args []string) error {
 	if err := cobra.NoArgs(cmd, args); err != nil {
-		return usageErrorf("%s", err)
+		return asUsageError(err)
 	}
 	return nil
 }
