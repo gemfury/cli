@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 )
 
 // NewCmdPush generates the Cobra command for "push"
@@ -48,17 +49,20 @@ func NewCmdPush() *cobra.Command {
 					}
 					defer file.Close()
 
+					// A directory opens fine, but there is nothing to upload
+					stat, err := file.Stat()
+					if err != nil {
+						return err
+					} else if stat.IsDir() {
+						return &fs.PathError{Op: "read", Path: path, Err: syscall.EISDIR}
+					}
+
 					// Prepare progress bar
 					var reader io.Reader = file
 					if noProgress {
 						term.Printf("%s", prefix)
 						prefix = ""
 					} else {
-						stat, err := file.Stat()
-						if err != nil {
-							return err
-						}
-
 						bar := term.StartProgress(stat.Size(), prefix)
 						reader = bar.NewProxyReader(file)
 						defer bar.Finish()
@@ -77,6 +81,8 @@ func NewCmdPush() *cobra.Command {
 					term.Printf("%s- cancelled\n", prefix)
 				} else if errors.Is(err, fs.ErrNotExist) {
 					term.Printf("%s- file not found\n", prefix)
+				} else if errors.Is(err, syscall.EISDIR) {
+					term.Printf("%s- is a directory\n", prefix)
 				} else if errors.Is(err, api.ErrUnauthorized) {
 					term.Printf("%s- unauthorized\n", prefix)
 				} else if errors.Is(err, api.ErrForbidden) {

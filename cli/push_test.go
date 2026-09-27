@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 )
 
@@ -138,6 +139,29 @@ func TestPushCommandPartialFailure(t *testing.T) {
 	expectOutput(t, term,
 		"Uploading 100%d.gem - done\nUploading missing.gem - file not found\n",
 		"Error: 1 of 2 uploads failed\n")
+}
+
+// A directory is refused before anything is uploaded
+func TestPushCommandDirectory(t *testing.T) {
+	for _, args := range [][]string{{"push"}, {"push", "--quiet"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			auth := terminal.TestAuther("user", "abc123", nil)
+			term := terminal.NewForTest()
+
+			server := offlineServer(t)
+			dir := t.TempDir()
+
+			cc := testContext(t, term, auth, server)
+			err := runCommand(cc, append(args, dir))
+			if !errors.Is(err, syscall.EISDIR) {
+				t.Errorf("Expected syscall.EISDIR, got: %v", err)
+			}
+
+			expectOutput(t, term,
+				fmt.Sprintf("Uploading %s - is a directory\n", filepath.Base(dir)),
+				fmt.Sprintf("Error: read %s: is a directory\n", dir))
+		})
+	}
 }
 
 // Tests run in the directory of their package

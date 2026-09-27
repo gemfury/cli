@@ -3,6 +3,7 @@ package cli
 import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
+	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/spf13/cobra"
 
 	"fmt"
@@ -32,6 +33,7 @@ func NewCmdGitRoot() *cobra.Command {
 // NewCmdGitDestroy generates the Cobra command for "git:destroy"
 func NewCmdGitDestroy() *cobra.Command {
 	var resetOnly bool
+	var forceFlag bool
 
 	destroyCmd := &cobra.Command{
 		Use:     "destroy REPO",
@@ -39,14 +41,26 @@ func NewCmdGitDestroy() *cobra.Command {
 		Short:   "Remove Git repository",
 		Args:    repoArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			term := ctx.Terminal(cmd.Context())
+			cc := cmd.Context()
+			term := ctx.Terminal(cc)
 
 			// Reset-only when called as "git:reset"
 			if cmd.CalledAs() == "reset" {
 				resetOnly = true
 			}
 
-			cc := cmd.Context()
+			action, done := "remove", "Removed"
+			if resetOnly {
+				action, done = "reset", "Reset"
+			}
+
+			if !forceFlag {
+				confirm := fmt.Sprintf("Are you sure you want to %s the %s repository? [y/N]", action, args[0])
+				if ok, err := terminal.PromptConfirm(term, confirm); !ok {
+					return err
+				}
+			}
+
 			c, err := newAPIClient(cc)
 			if err != nil {
 				return err
@@ -57,23 +71,19 @@ func NewCmdGitDestroy() *cobra.Command {
 				return err
 			}
 
-			if resetOnly {
-				term.Printf("Reset %s repository\n", args[0])
-			} else {
-				term.Printf("Removed %s repository\n", args[0])
-			}
-
+			term.Printf("%s %s repository\n", done, args[0])
 			return nil
 		},
 	}
 
 	// Flags and options
 	destroyCmd.Flags().BoolVar(&resetOnly, "reset-only", false, "Reset repo without destroying")
+	destroyCmd.Flags().BoolVarP(&forceFlag, "force", "f", false, "Skip confirmation")
 
 	return destroyCmd
 }
 
-// NewCmdGitRename generates the Cobra command for "git:reset"
+// NewCmdGitRename generates the Cobra command for "git:rename"
 func NewCmdGitRename() *cobra.Command {
 	renameCmd := &cobra.Command{
 		Use:   "rename REPO NEWNAME",

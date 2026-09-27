@@ -7,6 +7,7 @@ import (
 
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -15,7 +16,7 @@ import (
 // PromptConfirm asks a "y/N" question from Stdin. Leaving it unanswered,
 // with Ctrl-C or Ctrl-D, interrupts the command rather than declines.
 func PromptConfirm(t Terminal, label string) (bool, error) {
-	_, err := t.RunPrompt(&promptui.Prompt{Label: label, IsConfirm: true})
+	_, err := t.RunPrompt(confirmPrompt(label))
 	switch {
 	case errors.Is(err, promptui.ErrAbort):
 		return false, nil
@@ -23,6 +24,23 @@ func PromptConfirm(t Terminal, label string) (bool, error) {
 		return false, context.Canceled
 	}
 	return err == nil, err
+}
+
+// confirmTemplates show the label as it is, for it ends in "? [y/N]" already.
+// PromptUI would otherwise add the same to the question being asked (Confirm),
+// and a colon once that is declined (Invalid) or answered (Success).
+var confirmTemplates = promptui.PromptTemplates{
+	Confirm: fmt.Sprintf(iconLabelTemplate, promptui.IconInitial),
+	Invalid: fmt.Sprintf(iconLabelTemplate, promptui.IconBad),
+	Success: `{{ . | faint }} `,
+}
+
+const iconLabelTemplate = `{{ "%s" | bold }} {{ . | bold }} `
+
+// confirmPrompt is the "y/N" question that PromptConfirm asks
+func confirmPrompt(label string) *promptui.Prompt {
+	templates := confirmTemplates // PromptUI prepares the templates it is given
+	return &promptui.Prompt{Label: label, IsConfirm: true, Templates: &templates}
 }
 
 // Control bytes that mean "quit" at a single-key prompt. The terminal is in
