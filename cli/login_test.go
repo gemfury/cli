@@ -1,15 +1,20 @@
 package cli_test
 
 import (
+	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/cli"
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/internal/testutil"
 	"github.com/gemfury/cli/pkg/terminal"
 
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Login is more or less the same as the "whoami" command
@@ -364,5 +369,74 @@ func TestLogoutCommandAbort(t *testing.T) {
 
 	if auth.User != "user" || auth.Pass != "abc123" || auth.Err != nil {
 		t.Errorf("Expected command to retain auth: %+v", auth)
+	}
+}
+
+// pendingLoginServer never approves the browser login: polling blocks
+// until the CLI gives up. onPoll is called as each poll arrives.
+func pendingLoginServer(t *testing.T, onPoll func()) *httptest.Server {
+	t.Helper()
+	return testutil.APIServerCustom(t, func(h *http.ServeMux) {
+		h.HandleFunc("/cli/auth", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "POST" {
+				w.Write([]byte(`{"browser_url": "https://gemfury.com", "cli_url": "/cli/auth", "token": "xyz"}`))
+				return
+			}
+			onPoll()
+			<-r.Context().Done()
+		})
+	})
+}
+
+// Interrupting the wait for a browser login ends the command right away
+func TestLoginCommandInterrupted(t *testing.T) {
+	auth := terminal.TestAuther("", "", nil)
+	term := terminal.NewForTest()
+
+	cc, cancel := context.WithCancel(cli.TestContext(term, auth))
+	defer cancel()
+
+	server := pendingLoginServer(t, cancel)
+	defer server.Close()
+
+	ctx.GlobalFlags(cc).Endpoint = server.URL
+	term.InWrite([]byte("!"))
+
+	start := time.Now()
+	err := runCommand(cc, []string{"login"})
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Expected context.Canceled, got: %v", err)
+	} else if d := time.Since(start); d > 5*time.Second {
+		t.Errorf("Expected a prompt exit, took %s", d)
+	}
+
+	if exp := "Cancelled\n"; string(term.ErrBytes()) != exp {
+		t.Errorf("Expected %q on stderr, got %q", exp, term.ErrBytes())
+	}
+
+	if u, p, _ := auth.Auth(); u != "" || p != "" {
+		t.Errorf("Expected no saved credentials, got %q/%q", u, p)
+	}
+}
+
+// A browser login that is never approved times out, poll in flight or not
+func TestLoginCommandTimeout(t *testing.T) {
+	auth := terminal.TestAuther("", "", nil)
+	term := terminal.NewForTest()
+
+	server := pendingLoginServer(t, func() {})
+	defer server.Close()
+
+	cli.SetLoginPollTimeout(t, 100*time.Millisecond)
+	cc := testContext(term, auth, server)
+	term.InWrite([]byte("!"))
+
+	err := runCommand(cc, []string{"login"})
+	if !errors.Is(err, api.ErrTimeout) {
+		t.Errorf("Expected api.ErrTimeout, got: %v", err)
+	}
+
+	if exp := "Error: Operation timed out. Try again later.\n"; string(term.ErrBytes()) != exp {
+		t.Errorf("Expected %q on stderr, got %q", exp, term.ErrBytes())
 	}
 }

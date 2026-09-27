@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -77,6 +78,13 @@ func Execute(cc context.Context, rootCmd *cobra.Command) error {
 	}
 
 	errOut := rootCmd.ErrOrStderr()
+
+	// An interrupted command has nothing to report but the interruption
+	if errors.Is(err, context.Canceled) {
+		fmt.Fprintln(errOut, "Cancelled")
+		return err
+	}
+
 	fmt.Fprintf(errOut, "Error: %s\n", err)
 
 	if IsUsageError(err) {

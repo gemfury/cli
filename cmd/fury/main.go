@@ -4,9 +4,16 @@ import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/cli"
 
+	"context"
+	"errors"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 )
+
+// Exit status for a command that was interrupted (128 + SIGINT)
+const exitInterrupted = 130
 
 // Populated by GoReleaser
 var (
@@ -14,7 +21,12 @@ var (
 )
 
 func main() {
-	cc := cli.CommandContext()
+	// Interrupting the process cancels the context of the running command.
+	// From then on signals are back to their default handling, so that
+	// a second Ctrl-C ends a command that is slow to wind down.
+	cc, stop := signal.NotifyContext(cli.CommandContext(), os.Interrupt, syscall.SIGTERM)
+	context.AfterFunc(cc, stop)
+
 	rootCmd := cli.NewRootCommand(cc)
 
 	// Populate version strings everywhere
@@ -27,7 +39,12 @@ func main() {
 	}
 
 	// Execute reports any error; only the exit status is left to set
-	if err := cli.Execute(cc, rootCmd); err != nil {
+	err := cli.Execute(cc, rootCmd)
+	stop() // os.Exit skips deferred calls
+
+	if errors.Is(err, context.Canceled) {
+		os.Exit(exitInterrupted)
+	} else if err != nil {
 		os.Exit(1)
 	}
 }

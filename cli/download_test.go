@@ -2,10 +2,12 @@ package cli_test
 
 import (
 	"github.com/gemfury/cli/api"
+	"github.com/gemfury/cli/cli"
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/internal/testutil"
 	"github.com/gemfury/cli/pkg/terminal"
 
+	"context"
 	"crypto/sha512"
 	"encoding/hex"
 	"errors"
@@ -105,6 +107,44 @@ func TestDownloadCommandForeignURL(t *testing.T) {
 
 	if _, err := os.Stat("foo-1.2.3.tgz"); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("No file should be written for a refused download")
+	}
+}
+
+// An interrupted download leaves no partial file to fail a later checksum
+func TestDownloadCommandInterrupted(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	cc, cancel := context.WithCancel(cli.TestContext(term, auth))
+	defer cancel()
+
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/packages/foo/versions/1.2.3", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(downloadVersionJSON(r, "ver_1", "foo", "1.2.3", "foo-1.2.3.tgz")))
+		})
+		mux.HandleFunc("/downloads/", func(w http.ResponseWriter, r *http.Request) {
+			// Interrupted after the first half of the file
+			w.Header().Set("Content-Length", fmt.Sprint(len(downloadContent)))
+			w.Write([]byte(downloadContent[:len(downloadContent)/2]))
+			w.(http.Flusher).Flush()
+			cancel()
+			<-r.Context().Done()
+		})
+	})
+	defer server.Close()
+
+	flags := ctx.GlobalFlags(cc)
+	flags.Endpoint = server.URL
+
+	t.Chdir(t.TempDir())
+
+	err := runCommand(cc, []string{"beta", "download", "foo@1.2.3"})
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Expected context.Canceled, got: %v", err)
+	}
+
+	if _, err := os.Stat("foo-1.2.3.tgz"); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("No file should be left by an interrupted download")
 	}
 }
 

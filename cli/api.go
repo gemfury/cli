@@ -127,6 +127,9 @@ func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResp
 	return &resp.User, nil
 }
 
+// loginPollTimeout is how long browserLogin waits for the user to approve
+var loginPollTimeout = 3 * time.Minute
+
 // browserLogin is a challenge/response authentication via browser
 func browserLogin(cmd *cobra.Command) (*api.LoginResponse, error) {
 	cc := cmd.Context()
@@ -161,19 +164,35 @@ func browserLogin(cmd *cobra.Command) (*api.LoginResponse, error) {
 	onDone := terminal.SpinIfTerminal(term, " Waiting ...")
 	defer onDone()
 
-	// LoginGet API will block & timeout, so we poll until a time limit.
-	resp, err := backoff.Retry(cc, func() (*api.LoginGetResponse, error) {
-		resp, err := c.LoginGet(cc, createResp)
+	// LoginGet API will block & timeout, so we poll until a time limit,
+	// which is shorter than the expiry of all the JWT tokens. The deadline
+	// also ends a poll that is in flight, unlike backoff's own time limit.
+	pollCtx, cancel := context.WithTimeout(cc, loginPollTimeout)
+	defer cancel()
+
+	resp, err := backoff.Retry(pollCtx, func() (*api.LoginGetResponse, error) {
+		resp, err := c.LoginGet(pollCtx, createResp)
 		if !errors.Is(err, api.ErrTimeout) && !errors.Is(err, api.ErrNotFound) {
 			err = backoff.Permanent(err) // Retry only on timeout or not-found
 		}
 		return resp, err
 	},
-		// We retry with constant backoff waiting for user to approve login.
-		// Max elapsed time is shorter than the expiry of all the JWT tokens.
+		// We retry with constant backoff waiting for user to approve login
 		backoff.WithBackOff(backoff.NewConstantBackOff(500*time.Millisecond)),
-		backoff.WithMaxElapsedTime(3*time.Minute),
+		backoff.WithMaxElapsedTime(0), // Limited by pollCtx
 	)
+
+	// Report why the login failed, rather than why polling stopped
+	if re := backoff.AsRetryError(err); re != nil {
+		switch {
+		case cc.Err() != nil:
+			err = cc.Err() // Interrupted
+		case pollCtx.Err() != nil || errors.Is(re.LastErr, api.ErrNotFound):
+			err = api.ErrTimeout
+		default:
+			err = re.LastErr
+		}
+	}
 
 	if resp == nil {
 		return nil, err
@@ -181,8 +200,6 @@ func browserLogin(cmd *cobra.Command) (*api.LoginResponse, error) {
 
 	if resp.Error != "" {
 		err = errors.New(resp.Error)
-	} else if errors.Is(err, api.ErrNotFound) {
-		err = api.ErrTimeout
 	}
 
 	return &resp.LoginResponse, err
