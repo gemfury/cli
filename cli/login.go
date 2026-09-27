@@ -2,7 +2,6 @@ package cli
 
 import (
 	"github.com/gemfury/cli/internal/ctx"
-	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/spf13/cobra"
 
 	"context"
@@ -37,7 +36,7 @@ func NewCmdLogout() *cobra.Command {
 				return nil
 			}
 
-			if ok, err := terminal.PromptConfirm(term, "Are you sure you want to logout? [y/N]"); !ok {
+			if ok, err := term.Confirm("Are you sure you want to logout? [y/N]"); !ok {
 				return err
 			}
 
@@ -67,7 +66,7 @@ func logoutCurrent(cc context.Context, token string, onFailConfirm string) error
 	} else if err != nil {
 		term := ctx.Terminal(cc)
 		fmt.Fprintf(term.IOErr(), "Error deactivating your old CLI credentials: %s\n", err)
-		if ok, promptErr := terminal.PromptConfirm(term, onFailConfirm); promptErr != nil {
+		if ok, promptErr := term.Confirm(onFailConfirm); promptErr != nil {
 			return promptErr
 		} else if !ok {
 			return err
@@ -89,7 +88,14 @@ func NewCmdLogin() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cc := cmd.Context()
 			auth := ctx.Auther(cc)
+			term := ctx.Terminal(cc)
 			inlineToken := inlineAuthToken(cc)
+
+			// Login needs a user to answer its prompts. Without one, fail
+			// before the saved session is revoked, rather than after.
+			if inlineToken == "" && !term.IsInteractive() {
+				return ErrLoginUnattended
+			}
 
 			// Logout previous CLI token, if present in .netrc. With an inline
 			// token, we only verify it, so saved credentials are left alone.
@@ -117,8 +123,6 @@ func NewCmdLogin() *cobra.Command {
 					return err
 				}
 			}
-
-			term := ctx.Terminal(cc)
 
 			if inlineToken != "" {
 				term.Printf("API token belongs to %q\n", user.Name)

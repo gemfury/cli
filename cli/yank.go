@@ -3,7 +3,6 @@ package cli
 import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
-	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/spf13/cobra"
 
 	"context"
@@ -63,7 +62,7 @@ func NewCmdYank() *cobra.Command {
 			if !forceFlag {
 				termPrintVersions(term, versions)
 				confirm := "Are you sure you want to delete these files? [y/N]"
-				if ok, err := terminal.PromptConfirm(term, confirm); !ok {
+				if ok, err := term.Confirm(confirm); !ok {
 					return err
 				}
 			}

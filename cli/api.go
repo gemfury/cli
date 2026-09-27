@@ -115,6 +115,10 @@ var errLoginCancelled = errors.New("Login cancelled")
 // the terminal to login (a pipe, CI, an agent), so login is not attempted
 var ErrNotLoggedIn = errors.New(`Not logged in. Set FURY_TOKEN or run "fury login" in a terminal.`)
 
+// ErrLoginUnattended is returned by "login" when there is no user to ask
+// at the terminal, or none to be asked, whatever the saved credentials
+var ErrLoginUnattended = errors.New("Cannot login with no one to ask. Set FURY_TOKEN to authenticate instead.")
+
 func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResponse, error) {
 	cc := cmd.Context()
 	var err error

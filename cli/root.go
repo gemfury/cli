@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/gemfury/cli/internal/ctx"
+	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -19,7 +20,10 @@ func NewRootCommand(cc context.Context) *cobra.Command {
 
 Environment variables:
   FURY_TOKEN     Authentication token, unless --api-token is given
-  FURY_ACCOUNT   Account to act on, unless --account is given`,
+  FURY_ACCOUNT   Account to act on, unless --account is given
+
+Without a terminal, or with --no-input, nothing is asked: pass --yes
+to confirm, and set FURY_TOKEN to authenticate.`,
 
 		// Execute reports errors and usage, not Cobra
 		SilenceErrors: true,
@@ -37,16 +41,24 @@ Environment variables:
 		return asUsageError(err)
 	})
 
-	// Ensure authentication for all commands (see skipsAuth for exceptions)
+	// Global flags (account, verbose, etc)
+	flags := ctx.GlobalFlags(cc)
+
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		// Flags are parsed by now: questions are answered as they ask
+		cc := cmd.Context()
+		term := terminal.Unattended(ctx.Terminal(cc), flags.Yes, flags.NoInput)
+		cmd.SetContext(ctx.WithTerminal(cc, term))
+
+		// Ensure authentication for all commands (see skipsAuth for exceptions)
 		return preRunCheckAuthentication(cmd, args)
 	}
 
-	// Global flags (account, verbose, etc)
-	flags := ctx.GlobalFlags(cc)
 	rootFlagSet := rootCmd.PersistentFlags()
 	rootFlagSet.StringVar(&flags.AuthToken, "api-token", "", "Inline authentication token (or set FURY_TOKEN)")
 	rootFlagSet.StringVarP(&flags.Account, "account", "a", "", "Current account username (or set FURY_ACCOUNT)")
+	rootFlagSet.BoolVarP(&flags.Yes, "yes", "y", false, "Answer yes to every confirmation")
+	rootFlagSet.BoolVar(&flags.NoInput, "no-input", false, "Never ask; fail where input is needed")
 	rootCmd.SetGlobalNormalizationFunc(globalFlagNormalization)
 
 	// Connect child commands

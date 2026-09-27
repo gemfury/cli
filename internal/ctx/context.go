@@ -22,6 +22,8 @@ type CmdGlobalFlags struct {
 	Endpoint     string
 	AuthToken    string
 	Account      string
+	Yes          bool
+	NoInput      bool
 }
 
 func CmdContextWith(ctx context.Context, t terminal.Terminal, as terminal.Auther) context.Context {
@@ -29,6 +31,11 @@ func CmdContextWith(ctx context.Context, t terminal.Terminal, as terminal.Auther
 	ctx = context.WithValue(ctx, ctxTerminalKey, t)
 	ctx = context.WithValue(ctx, ctxAutherKey, as)
 	return ctx
+}
+
+// WithTerminal replaces the terminal of a command context
+func WithTerminal(ctx context.Context, t terminal.Terminal) context.Context {
+	return context.WithValue(ctx, ctxTerminalKey, t)
 }
 
 func GlobalFlags(ctx context.Context) *CmdGlobalFlags {

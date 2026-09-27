@@ -247,7 +247,7 @@ func backupCheckPath(term terminal.Terminal, v *api.Version, path string, status
 	if exp := v.Digests.SHA512; exp != sum {
 		term.Printf("%s (CHECKSUM MISMATCH)\n", status("❌"))
 		confirm := "Do you want to delete and redownload? [y/N]"
-		if ok, err := terminal.PromptConfirm(term, confirm); err != nil {
+		if ok, err := term.Confirm(confirm); err != nil {
 			return err
 		} else if ok {
 			file.Close()

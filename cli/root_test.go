@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -407,6 +408,98 @@ func TestMultiItemCommandInterruptedBetweenItems(t *testing.T) {
 
 	expectInterrupted(t, runCommand(cc, []string{"push", samplePackagePath(), samplePackagePath()}))
 	expectOutput(t, term, "Uploading sample.txt - done\n", "Cancelled\n")
+}
+
+// mutableServer has what yank, git destroy, and logout would change,
+// and counts the requests that do so
+func mutableServer(t *testing.T, mutations *atomic.Int32) *httptest.Server {
+	t.Helper()
+	mutate := func(w http.ResponseWriter, r *http.Request) {
+		mutations.Add(1)
+		w.Write([]byte("{}"))
+	}
+
+	return testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("GET /versions", func(w http.ResponseWriter, r *http.Request) {
+			testutil.APIPaginatedResponse(t, w, r, versionsResponses, 200)
+		})
+		mux.HandleFunc("DELETE /packages/{pid}/versions/{vid}", mutate)
+		mux.HandleFunc("DELETE /git/repos/me/repo-name", mutate)
+		mux.HandleFunc("POST /logout", mutate)
+	})
+}
+
+// With --yes, every "y/N" question is answered without being asked.
+// No answers are given to the terminal, so a question would fail the command.
+func TestConfirmationByFlag(t *testing.T) {
+	for name, tc := range map[string]struct {
+		args      []string
+		noUser    bool // Without a terminal
+		mutations int32
+	}{
+		"yank --yes":                 {[]string{"yank", "foo@0.0.1", "--yes"}, false, 2},
+		"git destroy -y":             {[]string{"git", "destroy", "repo-name", "-y"}, false, 1},
+		"logout --yes":               {[]string{"logout", "--yes"}, false, 1},
+		"--yes before the command":   {[]string{"--yes", "logout"}, false, 1},
+		"--yes without a terminal":   {[]string{"logout", "--yes"}, true, 1},
+		"--force without a terminal": {[]string{"git", "destroy", "repo-name", "--force"}, true, 1},
+		"--force --no-input":         {[]string{"yank", "foo@0.0.1", "--force", "--no-input"}, false, 2},
+	} {
+		t.Run(name, func(t *testing.T) {
+			auth := terminal.TestAuther("user", "abc123", nil)
+			term := terminal.NewForTest()
+			term.SetInteractive(!tc.noUser)
+
+			var mutations atomic.Int32
+			server := mutableServer(t, &mutations)
+
+			cc := testContext(t, term, auth, server)
+			if err := runCommandNoErr(cc, tc.args); err != nil {
+				t.Fatal(err)
+			}
+
+			if n := mutations.Load(); n != tc.mutations {
+				t.Errorf("Expected %d requests to change things, got %d", tc.mutations, n)
+			}
+		})
+	}
+}
+
+// With no one to ask, for lack of a terminal or by --no-input,
+// a command that needs confirmation fails without changing anything
+func TestConfirmationNeeded(t *testing.T) {
+	for _, args := range [][]string{
+		{"yank", "foo@0.0.1"},
+		{"git", "destroy", "repo-name"},
+		{"logout"},
+	} {
+		for name, flags := range map[string][]string{
+			"without a terminal": nil,
+			"with --no-input":    {"--no-input"},
+		} {
+			t.Run(strings.Join(args, " ")+" "+name, func(t *testing.T) {
+				auth := terminal.TestAuther("user", "abc123", nil)
+				term := terminal.NewForTest()
+				term.SetInteractive(flags != nil) // At a terminal
+
+				var mutations atomic.Int32
+				server := mutableServer(t, &mutations)
+
+				cc := testContext(t, term, auth, server)
+				err := runCommand(cc, slices.Concat(args, flags))
+				if !errors.Is(err, terminal.ErrNoInput) {
+					t.Errorf("Expected terminal.ErrNoInput, got: %v", err)
+				}
+
+				expectErrOutput(t, term, "Error: Confirmation needed. Pass --yes to confirm, as there is no one to ask.\n")
+				expectCredentials(t, auth, "user", "abc123")
+
+				if n := mutations.Load(); n != 0 {
+					t.Errorf("Expected no requests to change things, got %d", n)
+				}
+			})
+		}
+	}
 }
 
 // Context altering options added to test commands

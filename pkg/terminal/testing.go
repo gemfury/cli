@@ -81,6 +81,15 @@ func (tt *testTerm) OpenBrowser(context.Context, string) bool {
 	return false
 }
 
+// Confirm is answered as any other prompt, and declined unless by a yes
+func (tt testTerm) Confirm(label string) (bool, error) {
+	answer, err := tt.RunPrompt(&promptui.Prompt{Label: label})
+	if err == nil && !strings.EqualFold(answer, "y") {
+		err = promptui.ErrAbort
+	}
+	return confirmed(err)
+}
+
 func (tt testTerm) RunPrompt(p *promptui.Prompt) (string, error) {
 	if l, ok := p.Label.(string); ok {
 		if out, ok := tt.prompts[l]; ok {
@@ -91,11 +100,6 @@ func (tt testTerm) RunPrompt(p *promptui.Prompt) (string, error) {
 				return "", promptui.ErrInterrupt
 			case "EOF":
 				return "", promptui.ErrEOF
-			}
-
-			// Any answer to a "y/N" question, other than yes, declines
-			if p.IsConfirm && !strings.EqualFold(out, "y") {
-				return "", promptui.ErrAbort
 			}
 			return out, nil
 		}

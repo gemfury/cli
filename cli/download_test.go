@@ -216,6 +216,7 @@ func TestBackupCommandSuccess(t *testing.T) {
 // A file that is there already, but fails its checksum, is downloaded again
 // only when confirmed. Declining fails that item alone, whereas leaving the
 // question unanswered interrupts the command, the next item unattempted.
+// With --yes, the question is not asked.
 func TestDownloadCommandChecksumMismatch(t *testing.T) {
 	const stale = "stale-bytes"
 	const declined = "Problem downloading \"foo@1.2.3\": Checksum failed\nError: 1 of 2 downloads failed\n"
@@ -229,6 +230,7 @@ func TestDownloadCommandChecksumMismatch(t *testing.T) {
 		"ABORT":     {stale, downloadContent, declined},
 		"INTERRUPT": {stale, "", "Cancelled\n"},
 		"EOF":       {stale, "", "Cancelled\n"},
+		"--yes":     {downloadContent, downloadContent, ""},
 	} {
 		t.Run(answer, func(t *testing.T) {
 			auth := terminal.TestAuther("user", "abc123", nil)
@@ -242,9 +244,15 @@ func TestDownloadCommandChecksumMismatch(t *testing.T) {
 				mux.HandleFunc("/downloads/", downloadHandler(t))
 			})
 
-			term.SetPromptResponses(map[string]string{
-				"Do you want to delete and redownload? [y/N]": answer,
-			})
+			// The answer is given by the flag, or else by the user
+			args := []string{"beta", "download", "foo@1.2.3", "bar@1.2.3"}
+			if strings.HasPrefix(answer, "--") {
+				args = append(args, answer)
+			} else {
+				term.SetPromptResponses(map[string]string{
+					"Do you want to delete and redownload? [y/N]": answer,
+				})
+			}
 
 			t.Chdir(t.TempDir())
 			if err := os.WriteFile("foo-1.2.3.tgz", []byte(stale), 0600); err != nil {
@@ -252,7 +260,7 @@ func TestDownloadCommandChecksumMismatch(t *testing.T) {
 			}
 
 			cc := testContext(t, term, auth, server)
-			err := runCommand(cc, []string{"beta", "download", "foo@1.2.3", "bar@1.2.3"})
+			err := runCommand(cc, args)
 			if (err != nil) != (tc.stderr != "") {
 				t.Errorf("Unexpected command error: %v", err)
 			}

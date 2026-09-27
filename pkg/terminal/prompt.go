@@ -13,10 +13,16 @@ import (
 	"time"
 )
 
-// PromptConfirm asks a "y/N" question from Stdin. Leaving it unanswered,
-// with Ctrl-C or Ctrl-D, interrupts the command rather than declines.
-func PromptConfirm(t Terminal, label string) (bool, error) {
+// Confirm asks a "y/N" question from Stdin
+func (t term) Confirm(label string) (bool, error) {
 	_, err := t.RunPrompt(confirmPrompt(label))
+	return confirmed(err)
+}
+
+// confirmed is the answer to a "y/N" question, by the error from its prompt.
+// Leaving it unanswered, with Ctrl-C or Ctrl-D, interrupts the command
+// rather than declines.
+func confirmed(err error) (bool, error) {
 	switch {
 	case errors.Is(err, promptui.ErrAbort):
 		return false, nil
@@ -37,7 +43,7 @@ var confirmTemplates = promptui.PromptTemplates{
 
 const iconLabelTemplate = `{{ "%s" | bold }} {{ . | bold }} `
 
-// confirmPrompt is the "y/N" question that PromptConfirm asks
+// confirmPrompt is the "y/N" question that Confirm asks
 func confirmPrompt(label string) *promptui.Prompt {
 	templates := confirmTemplates // PromptUI prepares the templates it is given
 	return &promptui.Prompt{Label: label, IsConfirm: true, Templates: &templates}

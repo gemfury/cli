@@ -3,7 +3,6 @@ package cli
 import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
-	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/spf13/cobra"
 
 	"fmt"
@@ -56,7 +55,7 @@ func NewCmdGitDestroy() *cobra.Command {
 
 			if !forceFlag {
 				confirm := fmt.Sprintf("Are you sure you want to %s the %s repository? [y/N]", action, args[0])
-				if ok, err := terminal.PromptConfirm(term, confirm); !ok {
+				if ok, err := term.Confirm(confirm); !ok {
 					return err
 				}
 			}

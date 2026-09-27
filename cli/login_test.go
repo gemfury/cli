@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -160,13 +161,18 @@ func TestCommandLoginCancelled(t *testing.T) {
 }
 
 // Without credentials and without a terminal (pipe, CI), commands fail
-// fast: no login is started, nothing is requested, prompted, or saved
+// fast: no login is started, nothing is requested, prompted, or saved.
+// Likewise at a terminal, when its user is not to be asked.
 func TestCommandNotLoggedInNonInteractive(t *testing.T) {
-	for _, args := range [][]string{{"packages"}, {"whoami"}, {"login"}, {"login", "--interactive"}} {
+	for _, args := range [][]string{
+		{"packages"},
+		{"whoami"},
+		{"packages", "--no-input"},
+	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			auth := terminal.TestAuther("", "", nil)
 			term := terminal.NewForTest()
-			term.SetInteractive(false)
+			term.SetInteractive(slices.Contains(args, "--no-input")) // At a terminal
 
 			server := offlineServer(t)
 
@@ -180,6 +186,37 @@ func TestCommandNotLoggedInNonInteractive(t *testing.T) {
 
 			expectCredentials(t, auth, "", "")
 		})
+	}
+}
+
+// Without a terminal, or a user to be asked at one, there is no way to
+// login: the saved session is kept, rather than revoked for nothing
+func TestLoginCommandNonInteractive(t *testing.T) {
+	for _, args := range [][]string{
+		{"login"},
+		{"login", "--interactive"},
+		{"login", "--yes"},
+		{"login", "--no-input"},
+	} {
+		for name, saved := range map[string]string{"logged out": "", "logged in": "abc123"} {
+			t.Run(strings.Join(args, " ")+", "+name, func(t *testing.T) {
+				auth := terminal.TestAuther("", saved, nil)
+				term := terminal.NewForTest()
+				term.SetInteractive(slices.Contains(args, "--no-input")) // At a terminal
+
+				// Any request would be to revoke the session, or to login
+				server := offlineServer(t)
+
+				cc := testContext(t, term, auth, server)
+				err := runCommand(cc, args)
+				if !errors.Is(err, cli.ErrLoginUnattended) {
+					t.Fatalf("Expected cli.ErrLoginUnattended, got: %v", err)
+				}
+
+				expectOutput(t, term, "", "Error: Cannot login with no one to ask. Set FURY_TOKEN to authenticate instead.\n")
+				expectCredentials(t, auth, "", saved)
+			})
+		}
 	}
 }
 

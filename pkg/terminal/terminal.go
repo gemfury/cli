@@ -13,6 +13,7 @@ import (
 type Terminal interface {
 	StartProgress(int64, string) Progress
 	RunPrompt(*promptui.Prompt) (string, error)
+	Confirm(label string) (bool, error)
 	Printf(string, ...any) (int, error)
 	Println(a ...any) (n int, err error)
 	OpenBrowser(context.Context, string) bool
