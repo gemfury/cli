@@ -17,8 +17,9 @@ type TestTerm interface {
 func NewForTest() *testTerm {
 	streams := []*bytes.Buffer{{}, {}, {}}
 	return &testTerm{
-		prompts: map[string]string{},
-		streams: streams,
+		interactive: true,
+		prompts:     map[string]string{},
+		streams:     streams,
 		term: &term{
 			ioErr: writeCloser{streams[0]},
 			ioOut: writeCloser{streams[1]},
@@ -28,9 +29,20 @@ func NewForTest() *testTerm {
 }
 
 type testTerm struct {
-	prompts map[string]string
-	streams []*bytes.Buffer
+	interactive bool
+	prompts     map[string]string
+	streams     []*bytes.Buffer
 	*term
+}
+
+// Tests stand in for a user at the terminal, unless told otherwise
+func (tt testTerm) IsInteractive() bool {
+	return tt.interactive
+}
+
+// SetInteractive(false) simulates a run without a terminal (pipe, CI)
+func (tt *testTerm) SetInteractive(interactive bool) {
+	tt.interactive = interactive
 }
 
 func (tt testTerm) ErrBytes() []byte {

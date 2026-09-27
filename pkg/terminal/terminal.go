@@ -16,6 +16,7 @@ type Terminal interface {
 	Printf(string, ...any) (int, error)
 	Println(a ...any) (n int, err error)
 	OpenBrowser(context.Context, string) bool
+	IsInteractive() bool
 	IOIn() io.ReadCloser
 	IOErr() io.Writer
 	IOOut() io.Writer
@@ -53,6 +54,12 @@ func (t term) IOOut() io.Writer {
 
 func (t term) IOIn() io.ReadCloser {
 	return t.ioIn
+}
+
+// IsInteractive reports whether there is a user to answer prompts, which
+// is when Stdin is a terminal rather than a pipe, a file, or closed
+func (t term) IsInteractive() bool {
+	return isTerminal(t.ioIn)
 }
 
 func (t term) RunPrompt(p *promptui.Prompt) (string, error) {

@@ -162,6 +162,55 @@ func TestCommandLoginCancelled(t *testing.T) {
 	}
 }
 
+// Without credentials and without a terminal (pipe, CI), commands fail
+// fast: no login is started, nothing is requested, prompted, or saved
+func TestCommandNotLoggedInNonInteractive(t *testing.T) {
+	for _, args := range [][]string{{"packages"}, {"whoami"}, {"login"}, {"login", "--interactive"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			auth := terminal.TestAuther("", "", nil)
+			term := terminal.NewForTest()
+			term.SetInteractive(false)
+
+			server := offlineServer(t)
+
+			cc := testContext(t, term, auth, server)
+			err := runCommand(cc, args)
+			if !errors.Is(err, cli.ErrNotLoggedIn) {
+				t.Fatalf("Expected cli.ErrNotLoggedIn, got: %v", err)
+			}
+
+			expectOutput(t, term, "", "Error: Not logged in. Run \"fury login\" in a terminal or pass --api-token.\n")
+
+			if u, p, _ := auth.Auth(); u != "" || p != "" {
+				t.Errorf("Expected no saved credentials, got %q/%q", u, p)
+			}
+		})
+	}
+}
+
+// Credentials make a terminal unnecessary, whether saved or passed inline
+func TestCommandNonInteractiveWithCredentials(t *testing.T) {
+	for name, tc := range map[string]struct {
+		auth terminal.Auther
+		args []string
+	}{
+		"saved": {terminal.TestAuther("user", "abc123", nil), []string{"whoami"}},
+		"flag":  {terminal.TestAuther("", "", nil), []string{"whoami", "--api-token", "abc123"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			term := terminal.NewForTest()
+			term.SetInteractive(false)
+
+			server := testutil.APIServer(t, "GET", "/users/me", whoamiResponse, 200)
+
+			cc := testContext(t, term, tc.auth, server)
+			if err := runCommandNoErr(cc, tc.args); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+}
+
 // Logging in over a saved session revokes the saved token, not any other
 func TestLoginCommandReplacesSavedToken(t *testing.T) {
 	auth := terminal.TestAuther("old@example.com", "old-token", nil)

@@ -90,6 +90,10 @@ func preRunCheckAuthentication(cmd *cobra.Command, args []string) error {
 // prompt. "login" exits quietly on it; other commands report it.
 var errLoginCancelled = errors.New("Login cancelled")
 
+// ErrNotLoggedIn is returned when there are no credentials and no user at
+// the terminal to login (a pipe, CI, an agent), so login is not attempted
+var ErrNotLoggedIn = errors.New(`Not logged in. Run "fury login" in a terminal or pass --api-token.`)
+
 func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResponse, error) {
 	cc := cmd.Context()
 	var err error
@@ -97,6 +101,12 @@ func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResp
 	// Check whether we have login credentials from environment
 	if token, err := contextAuthToken(cc); token != "" || err != nil {
 		return nil, err
+	}
+
+	// Login needs a user to answer its prompts. Without one,
+	// fail before any request rather than start a login.
+	if !ctx.Terminal(cc).IsInteractive() {
+		return nil, ErrNotLoggedIn
 	}
 
 	// Trigger browser login
