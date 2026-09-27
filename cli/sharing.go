@@ -81,8 +81,12 @@ func NewCmdSharingAdd() *cobra.Command {
 				return err
 			}
 
-			fails := newFailures(term, len(args), "invitations")
+			fails := newFailures(cc, len(args), "invitations")
 			for _, name := range args {
+				if fails.interrupted() {
+					break
+				}
+
 				if err := c.AddCollaborator(cc, name, roleFlag); err != nil {
 					fails.add("adding", name, err)
 					continue
@@ -115,8 +119,12 @@ func NewCmdSharingRemove() *cobra.Command {
 				return err
 			}
 
-			fails := newFailures(term, len(args), "removals")
+			fails := newFailures(cc, len(args), "removals")
 			for _, name := range args {
+				if fails.interrupted() {
+					break
+				}
+
 				if err := c.RemoveCollaborator(cc, name); err != nil {
 					fails.add("removing", name, err)
 					continue

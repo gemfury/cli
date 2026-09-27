@@ -5,6 +5,7 @@ import (
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/spf13/cobra"
 
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -31,8 +32,12 @@ func NewCmdPush() *cobra.Command {
 			}
 
 			// Upload each file and collect errors
-			fails := newFailures(term, len(args), "uploads")
+			fails := newFailures(cc, len(args), "uploads")
 			for _, path := range args {
+				if fails.interrupted() {
+					break
+				}
+
 				name := filepath.Base(path)
 				prefix := fmt.Sprintf("Uploading %s ", name)
 
@@ -68,7 +73,9 @@ func NewCmdPush() *cobra.Command {
 				}
 
 				fails.record(err) // Reported by the status line below
-				if errors.Is(err, fs.ErrNotExist) {
+				if errors.Is(err, context.Canceled) {
+					term.Printf("%s- cancelled\n", prefix)
+				} else if errors.Is(err, fs.ErrNotExist) {
 					term.Printf("%s- file not found\n", prefix)
 				} else if errors.Is(err, api.ErrUnauthorized) {
 					term.Printf("%s- unauthorized\n", prefix)

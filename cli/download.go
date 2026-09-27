@@ -4,7 +4,6 @@ import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/pkg/terminal"
-	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 
 	"context"
@@ -49,14 +48,17 @@ func NewCmdDownload() *cobra.Command {
 
 func downloadVersions(cmd *cobra.Command, args []string) error {
 	cc := cmd.Context()
-	term := ctx.Terminal(cc)
 	c, err := newAPIClient(cc)
 	if err != nil {
 		return err
 	}
 
-	fails := newFailures(term, len(args), "downloads")
+	fails := newFailures(cc, len(args), "downloads")
 	for _, arg := range args {
+		if fails.interrupted() {
+			break
+		}
+
 		fails.add("downloading", arg, downloadArg(cc, c, arg))
 	}
 
@@ -244,15 +246,10 @@ func backupCheckPath(term terminal.Terminal, v *api.Version, path string, status
 	sum := hex.EncodeToString(hash.Sum(nil))
 	if exp := v.Digests.SHA512; exp != sum {
 		term.Printf("%s (CHECKSUM MISMATCH)\n", status("❌"))
-		prompt := promptui.Prompt{
-			Label:   "Do you want to delete and redownload? [y/N]",
-			Default: "N",
-		}
-
-		result, err := term.RunPrompt(&prompt)
-		if err != nil {
+		confirm := "Do you want to delete and redownload? [y/N]"
+		if ok, err := terminal.PromptConfirm(term, confirm); err != nil {
 			return err
-		} else if result == "Y" || result == "y" {
+		} else if ok {
 			file.Close()
 			os.Remove(path)
 			return nil

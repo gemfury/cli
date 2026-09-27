@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"strings"
 )
 
 type TestTerm interface {
@@ -57,6 +58,14 @@ func (tt testTerm) InWrite(b []byte) (int, error) {
 	return tt.streams[2].Write(b)
 }
 
+// OnOutput calls fn each time that there is a write to Stdout
+func (tt *testTerm) OnOutput(fn func()) {
+	tt.ioOut = writeCloser{writerFunc(func(b []byte) (int, error) {
+		defer fn()
+		return tt.streams[1].Write(b)
+	})}
+}
+
 // Handle PromptUI to avoid messing with Readline
 func (tt *testTerm) SetPromptResponses(p map[string]string) {
 	tt.prompts = p
@@ -75,7 +84,17 @@ func (tt *testTerm) OpenBrowser(context.Context, string) bool {
 func (tt testTerm) RunPrompt(p *promptui.Prompt) (string, error) {
 	if l, ok := p.Label.(string); ok {
 		if out, ok := tt.prompts[l]; ok {
-			if out == "ABORT" {
+			switch out {
+			case "ABORT":
+				return "", promptui.ErrAbort
+			case "INTERRUPT":
+				return "", promptui.ErrInterrupt
+			case "EOF":
+				return "", promptui.ErrEOF
+			}
+
+			// Any answer to a "y/N" question, other than yes, declines
+			if p.IsConfirm && !strings.EqualFold(out, "y") {
 				return "", promptui.ErrAbort
 			}
 			return out, nil
@@ -107,6 +126,13 @@ func (a *testAuth) Append(u, p string) error {
 func (a *testAuth) Wipe() error {
 	a.User, a.Pass = "", ""
 	return a.Err
+}
+
+// Equivalent to http.HandlerFunc for writers
+type writerFunc func([]byte) (int, error)
+
+func (fn writerFunc) Write(b []byte) (int, error) {
+	return fn(b)
 }
 
 // Equivalent to io.NopCloser for writers

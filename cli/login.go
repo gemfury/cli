@@ -57,14 +57,19 @@ func NewCmdLogout() *cobra.Command {
 // Deactivates & deletes the saved CLI token. The token is passed explicitly
 // so that the revocation always targets the saved credentials, never a token
 // given inline for the current invocation. If the server refuses the
-// revocation, the user is asked onFailConfirm before wiping anyway.
+// revocation, the user is asked onFailConfirm before wiping anyway,
+// and declining leaves that refusal as the error.
 func logoutCurrent(cc context.Context, token string, onFailConfirm string) error {
 	c := newAPIClientWithToken(cc, token)
 
-	if err := c.Logout(cc); err != nil {
+	if err := c.Logout(cc); errors.Is(err, context.Canceled) {
+		return err // Interrupted, rather than refused
+	} else if err != nil {
 		term := ctx.Terminal(cc)
 		fmt.Fprintf(term.IOErr(), "Error deactivating your old CLI credentials: %s\n", err)
-		if ok, _ := terminal.PromptConfirm(term, onFailConfirm); !ok {
+		if ok, promptErr := terminal.PromptConfirm(term, onFailConfirm); promptErr != nil {
+			return promptErr
+		} else if !ok {
 			return err
 		}
 	}
@@ -72,7 +77,7 @@ func logoutCurrent(cc context.Context, token string, onFailConfirm string) error
 	return ctx.Auther(cc).Wipe()
 }
 
-// NewCmdLogout invalidates session and wipes credentials
+// NewCmdLogin authenticates, replacing any saved CLI session
 func NewCmdLogin() *cobra.Command {
 	var interactiveFlag bool
 

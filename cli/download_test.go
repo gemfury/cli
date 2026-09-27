@@ -213,6 +213,61 @@ func TestBackupCommandSuccess(t *testing.T) {
 	}
 }
 
+// A file that is there already, but fails its checksum, is downloaded again
+// only when confirmed. Declining fails that item alone, whereas leaving the
+// question unanswered interrupts the command, the next item unattempted.
+func TestDownloadCommandChecksumMismatch(t *testing.T) {
+	const stale = "stale-bytes"
+	const declined = "Problem downloading \"foo@1.2.3\": Checksum failed\nError: 1 of 2 downloads failed\n"
+
+	for answer, tc := range map[string]struct {
+		foo, bar string // Content of each file afterwards
+		stderr   string
+	}{
+		"Y":         {downloadContent, downloadContent, ""},
+		"N":         {stale, downloadContent, declined},
+		"ABORT":     {stale, downloadContent, declined},
+		"INTERRUPT": {stale, "", "Cancelled\n"},
+		"EOF":       {stale, "", "Cancelled\n"},
+	} {
+		t.Run(answer, func(t *testing.T) {
+			auth := terminal.TestAuther("user", "abc123", nil)
+			term := terminal.NewForTest()
+
+			server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+				mux.HandleFunc("/packages/{pkg}/versions/1.2.3", func(w http.ResponseWriter, r *http.Request) {
+					pkg := r.PathValue("pkg")
+					w.Write([]byte(downloadVersionJSON(r, "ver_"+pkg, pkg, "1.2.3", pkg+"-1.2.3.tgz")))
+				})
+				mux.HandleFunc("/downloads/", downloadHandler(t))
+			})
+
+			term.SetPromptResponses(map[string]string{
+				"Do you want to delete and redownload? [y/N]": answer,
+			})
+
+			t.Chdir(t.TempDir())
+			if err := os.WriteFile("foo-1.2.3.tgz", []byte(stale), 0600); err != nil {
+				t.Fatal(err)
+			}
+
+			cc := testContext(t, term, auth, server)
+			err := runCommand(cc, []string{"beta", "download", "foo@1.2.3", "bar@1.2.3"})
+			if (err != nil) != (tc.stderr != "") {
+				t.Errorf("Unexpected command error: %v", err)
+			}
+
+			expectErrOutput(t, term, tc.stderr)
+
+			for name, exp := range map[string]string{"foo-1.2.3.tgz": tc.foo, "bar-1.2.3.tgz": tc.bar} {
+				if body, _ := os.ReadFile(name); string(body) != exp {
+					t.Errorf("Expected %q in %s, got %q", exp, name, body)
+				}
+			}
+		})
+	}
+}
+
 // A malformed argument and a missing version: both are reported, in order
 func TestDownloadCommandFailures(t *testing.T) {
 	auth := terminal.TestAuther("user", "abc123", nil)

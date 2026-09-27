@@ -5,17 +5,22 @@ import (
 	"github.com/manifoldco/promptui"
 	xterm "golang.org/x/term"
 
+	"context"
 	"errors"
 	"io"
 	"strings"
 	"time"
 )
 
-// PromptConfirm asks a "y/N" question from Stdin
+// PromptConfirm asks a "y/N" question from Stdin. Leaving it unanswered,
+// with Ctrl-C or Ctrl-D, interrupts the command rather than declines.
 func PromptConfirm(t Terminal, label string) (bool, error) {
 	_, err := t.RunPrompt(&promptui.Prompt{Label: label, IsConfirm: true})
-	if errors.Is(err, promptui.ErrAbort) {
+	switch {
+	case errors.Is(err, promptui.ErrAbort):
 		return false, nil
+	case errors.Is(err, promptui.ErrInterrupt), errors.Is(err, promptui.ErrEOF):
+		return false, context.Canceled
 	}
 	return err == nil, err
 }

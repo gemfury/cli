@@ -11,11 +11,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -114,8 +116,22 @@ func expectOutput(t *testing.T, term terminal.TestTerm, stdout, stderr string) {
 	if out := string(term.OutBytes()); out != stdout {
 		t.Errorf("Output should be %q, got %q", stdout, out)
 	}
+	expectErrOutput(t, term, stderr)
+}
+
+// expectErrOutput asserts exactly what went to stderr, whatever went to stdout
+func expectErrOutput(t *testing.T, term terminal.TestTerm, stderr string) {
+	t.Helper()
 	if errOut := string(term.ErrBytes()); errOut != stderr {
 		t.Errorf("Error output should be %q, got %q", stderr, errOut)
+	}
+}
+
+// expectCredentials asserts what credentials are saved, both empty for none
+func expectCredentials(t *testing.T, auth terminal.Auther, user, token string) {
+	t.Helper()
+	if u, p, _ := auth.Auth(); u != user || p != token {
+		t.Errorf("Expected saved credentials %q/%q, got %q/%q", user, token, u, p)
 	}
 }
 
@@ -293,6 +309,104 @@ func TestUnknownCommandOutput(t *testing.T) {
 	}
 
 	expectOutput(t, term, "", "Error: unknown command \"nosuchcmd\" for \"fury\"\nRun 'fury --help' for usage.\n")
+}
+
+// expectInterrupted asserts that a command ended by being interrupted
+func expectInterrupted(t *testing.T, err error) {
+	t.Helper()
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Expected context.Canceled, got: %v", err)
+	}
+}
+
+// unconfirmed are the ways of not confirming a "y/N" question,
+// and whether each interrupts the command rather than declines
+var unconfirmed = map[string]bool{"ABORT": false, "INTERRUPT": true, "EOF": true}
+
+// expectUnconfirmed asserts the outcome of a command whose confirmation was
+// not given: either declined, which is no error, or left unanswered, which
+// interrupts the command. Stdout is not checked, as it may hold the question.
+func expectUnconfirmed(t *testing.T, term terminal.TestTerm, err error, interrupted bool) {
+	t.Helper()
+	if interrupted {
+		expectInterrupted(t, err)
+		expectErrOutput(t, term, "Cancelled\n")
+	} else if err != nil {
+		t.Errorf("Command error: %s", err)
+	} else {
+		expectErrOutput(t, term, "")
+	}
+}
+
+// interruptOn handles a request by interrupting the command, by way of
+// cancel, while that request is in flight. It counts the requests handled.
+func interruptOn(cancel func(), requests *atomic.Int32) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		cancel()
+
+		// The end of a request is noticed only once its body is read
+		io.Copy(io.Discard, r.Body)
+		<-r.Context().Done()
+	}
+}
+
+// An interrupted command stops at the item that it was on: the remaining
+// items are not attempted, and only the interruption is reported
+func TestMultiItemCommandsInterrupted(t *testing.T) {
+	for name, tc := range map[string]struct {
+		args   []string
+		stdout string
+	}{
+		"push":           {[]string{"push", samplePackagePath(), samplePackagePath()}, "Uploading sample.txt - cancelled\n"},
+		"yank":           {[]string{"yank", "--force", "foo@1.0", "bar@1.0"}, ""},
+		"sharing add":    {[]string{"sharing", "add", "a@example.com", "b@example.com"}, ""},
+		"sharing remove": {[]string{"sharing", "remove", "a@example.com", "b@example.com"}, ""},
+		"download":       {[]string{"beta", "download", "foo@1.0", "bar@1.0"}, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			auth := terminal.TestAuther("user", "abc123", nil)
+			term := terminal.NewForTest()
+
+			cc, cancel := context.WithCancel(cli.TestContext(t.Context(), term, auth))
+			defer cancel()
+
+			var requests atomic.Int32
+			server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+				mux.HandleFunc("/", interruptOn(cancel, &requests))
+			})
+
+			flags := ctx.GlobalFlags(cc)
+			flags.PushEndpoint = server.URL
+			flags.Endpoint = server.URL
+
+			expectInterrupted(t, runCommand(cc, tc.args))
+			if n := requests.Load(); n != 1 {
+				t.Errorf("Expected 1 request before interruption, got %d", n)
+			}
+
+			expectOutput(t, term, tc.stdout, "Cancelled\n")
+		})
+	}
+}
+
+// An interruption between items leaves the command incomplete: it must
+// fail, though no item has, and must not attempt the remaining items
+func TestMultiItemCommandInterruptedBetweenItems(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	cc, cancel := context.WithCancel(cli.TestContext(t.Context(), term, auth))
+	defer cancel()
+
+	server := testutil.APIServer(t, "POST", "/uploads", pushResponse, 200)
+	ctx.GlobalFlags(cc).PushEndpoint = server.URL
+
+	// Interrupted once the first item is reported as done
+	term.OnOutput(cancel)
+
+	expectInterrupted(t, runCommand(cc, []string{"push", samplePackagePath(), samplePackagePath()}))
+	expectOutput(t, term, "Uploading sample.txt - done\n", "Cancelled\n")
 }
 
 // Context altering options added to test commands

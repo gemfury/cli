@@ -7,8 +7,10 @@ import (
 	"github.com/gemfury/cli/internal/testutil"
 	"github.com/gemfury/cli/pkg/terminal"
 
+	"context"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -162,6 +164,59 @@ func TestYankCommandMultiPackage(t *testing.T) {
 	if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}
+}
+
+// Nothing is removed unless confirmed
+func TestYankCommandUnconfirmed(t *testing.T) {
+	for answer, interrupted := range unconfirmed {
+		t.Run(answer, func(t *testing.T) {
+			auth := terminal.TestAuther("user", "abc123", nil)
+			term := terminal.NewForTest()
+
+			server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+				mux.HandleFunc("/versions", func(w http.ResponseWriter, r *http.Request) {
+					testutil.APIPaginatedResponse(t, w, r, versionsResponses, 200)
+				})
+				mux.HandleFunc("/packages/{pid}/versions/{vid}", func(w http.ResponseWriter, r *http.Request) {
+					t.Errorf("Unexpected removal: %s %s", r.Method, r.URL.Path)
+				})
+			})
+
+			term.SetPromptResponses(map[string]string{
+				"Are you sure you want to delete these files? [y/N]": answer,
+			})
+
+			cc := testContext(t, term, auth, server)
+			err := runCommand(cc, []string{"yank", "foo@0.0.1"})
+			expectUnconfirmed(t, term, err, interrupted)
+		})
+	}
+}
+
+// Interrupted while removing the first of two versions
+func TestYankCommandInterrupted(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	cc, cancel := context.WithCancel(cli.TestContext(t.Context(), term, auth))
+	defer cancel()
+
+	var removals atomic.Int32
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/versions", func(w http.ResponseWriter, r *http.Request) {
+			testutil.APIPaginatedResponse(t, w, r, versionsResponses, 200)
+		})
+		mux.HandleFunc("/packages/{pid}/versions/{vid}", interruptOn(cancel, &removals))
+	})
+
+	ctx.GlobalFlags(cc).Endpoint = server.URL
+
+	expectInterrupted(t, runCommand(cc, []string{"yank", "foo@0.0.1", "--force"}))
+	if n := removals.Load(); n != 1 {
+		t.Errorf("Expected 1 removal before interruption, got %d", n)
+	}
+
+	expectOutput(t, term, "", "Cancelled\n")
 }
 
 func TestYankCommandUnauthorized(t *testing.T) {

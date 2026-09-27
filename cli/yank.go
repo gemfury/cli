@@ -39,8 +39,12 @@ func NewCmdYank() *cobra.Command {
 
 			// Resolve every argument before removing anything
 			versions := make([]*api.Version, 0, len(args))
-			lookups := newFailures(term, len(args), "lookups")
+			lookups := newFailures(cc, len(args), "lookups")
 			for _, arg := range args {
+				if lookups.interrupted() {
+					break
+				}
+
 				pkgVersions, err := lookupVersions(cc, c, arg, versionFlag)
 				if err != nil {
 					lookups.add("looking up", arg, err)
@@ -64,8 +68,12 @@ func NewCmdYank() *cobra.Command {
 				}
 			}
 
-			removals := newFailures(term, len(versions), "removals")
+			removals := newFailures(cc, len(versions), "removals")
 			for _, v := range versions {
+				if removals.interrupted() {
+					break
+				}
+
 				if err := c.Yank(cc, v.Package.ID, v.ID); err != nil {
 					removals.add("removing", v.Filename, err)
 					continue

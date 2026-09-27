@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"github.com/gemfury/cli/internal/ctx"
 	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/spf13/cobra"
 
+	"context"
 	"errors"
 	"fmt"
 )
@@ -84,27 +86,37 @@ func noResults(term terminal.Terminal, count int, err error, msg string) bool {
 // extra is printed. A command that already reports each failed item itself
 // uses record instead of add. As with errors.Join, a nil error is ignored,
 // so a call's result can be passed straight in.
+//
+// An interrupted command stops at the item it was on and reports only the
+// interruption, even if no item has failed. It is interrupted by a signal,
+// or by the user at the prompt of an item.
 type failures struct {
-	term  terminal.Terminal
-	total int    // Items attempted
+	cc    context.Context
+	total int    // Items to attempt
 	what  string // Names the items in the summary, e.g. "uploads"
 	errs  []error
 }
 
 // newFailures starts collecting for a command about to attempt total items
-func newFailures(term terminal.Terminal, total int, what string) *failures {
-	return &failures{term: term, total: total, what: what}
+func newFailures(cc context.Context, total int, what string) *failures {
+	return &failures{cc: cc, total: total, what: what}
 }
 
-// add records a failed item, reporting it on stderr when there are several
+// interrupted reports whether to stop, leaving the remaining items unattempted
+func (f *failures) interrupted() bool {
+	return f.cc.Err() != nil || errors.Is(errors.Join(f.errs...), context.Canceled)
+}
+
+// add records a failed item, reporting it on stderr
+// when there are several, unless the command is interrupted
 func (f *failures) add(verb, item string, err error) {
 	if err == nil {
 		return
 	}
-	if f.total > 1 {
-		fmt.Fprintf(f.term.IOErr(), "Problem %s %q: %s\n", verb, item, err)
-	}
 	f.record(err)
+	if f.total > 1 && !f.interrupted() {
+		fmt.Fprintf(ctx.Terminal(f.cc).IOErr(), "Problem %s %q: %s\n", verb, item, err)
+	}
 }
 
 // record counts a failure without reporting it
@@ -118,6 +130,8 @@ func (f *failures) record(err error) {
 // so errors.Is and errors.As still see them
 func (f *failures) err() error {
 	switch {
+	case f.interrupted():
+		return context.Canceled
 	case len(f.errs) == 0:
 		return nil
 	case f.total == 1:

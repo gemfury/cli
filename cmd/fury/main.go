@@ -9,11 +9,9 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync/atomic"
 	"syscall"
 )
-
-// Exit status for a command that was interrupted (128 + SIGINT)
-const exitInterrupted = 130
 
 // Populated by GoReleaser
 var (
@@ -21,12 +19,7 @@ var (
 )
 
 func main() {
-	// Interrupting the process cancels the context of the running command.
-	// From then on signals are back to their default handling, so that
-	// a second Ctrl-C ends a command that is slow to wind down.
-	cc, stop := signal.NotifyContext(cli.CommandContext(), os.Interrupt, syscall.SIGTERM)
-	context.AfterFunc(cc, stop)
-
+	cc, caught := interruptible(cli.CommandContext())
 	rootCmd := cli.NewRootCommand(cc)
 
 	// Populate version strings everywhere
@@ -40,13 +33,48 @@ func main() {
 
 	// Execute reports any error; only the exit status is left to set
 	err := cli.Execute(cc, rootCmd)
-	stop() // os.Exit skips deferred calls
+	os.Exit(exitStatus(err, caught()))
+}
 
-	if errors.Is(err, context.Canceled) {
-		os.Exit(exitInterrupted)
-	} else if err != nil {
-		os.Exit(1)
+// interruptible derives the context of the running command, which is
+// cancelled when the process is interrupted. From then on signals are back
+// to their default handling, so that a second Ctrl-C ends a command that is
+// slow to wind down. Once the context is done, caught returns the signal.
+func interruptible(parent context.Context) (cc context.Context, caught func() os.Signal) {
+	cc, cancel := context.WithCancel(parent)
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+
+	var sig atomic.Value
+	go func() {
+		sig.Store(<-signals)
+		signal.Stop(signals)
+		cancel()
+	}()
+
+	return cc, func() os.Signal {
+		s, _ := sig.Load().(os.Signal)
+		return s
 	}
+}
+
+// exitStatus is the exit status for the error of a command, and for the
+// signal that interrupted it, if any. As in a shell, an interrupted command
+// exits with 128 plus the number of the signal, e.g. 130 for Ctrl-C.
+func exitStatus(err error, sig os.Signal) int {
+	switch {
+	case err == nil:
+		return 0
+	case !errors.Is(err, context.Canceled):
+		return 1
+	}
+
+	// Ctrl-C at a prompt is read as a key, rather than received as a signal
+	if s, ok := sig.(syscall.Signal); ok {
+		return 128 + int(s)
+	}
+	return 128 + int(syscall.SIGINT)
 }
 
 // Convert legacy (Ruby CLI) commands with ":" separator
