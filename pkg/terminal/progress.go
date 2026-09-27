@@ -2,7 +2,7 @@ package terminal
 
 import (
 	"github.com/cheggaaa/pb/v3"
-	"github.com/chzyer/readline"
+	xterm "golang.org/x/term"
 
 	"io"
 )
@@ -30,8 +30,18 @@ func (t term) StartProgress(size int64, prefix string) Progress {
 // interactive terminal. Anything without a file descriptor, such as the
 // buffers used in tests, is not.
 func isTerminal(stream any) bool {
+	_, ok := terminalFd(stream)
+	return ok
+}
+
+// terminalFd is the file descriptor of a stream that isTerminal
+func terminalFd(stream any) (int, bool) {
 	f, ok := stream.(interface{ Fd() uintptr })
-	return ok && readline.IsTerminal(int(f.Fd()))
+	if !ok {
+		return 0, false
+	}
+	fd := int(f.Fd())
+	return fd, xterm.IsTerminal(fd)
 }
 
 type Progress interface {

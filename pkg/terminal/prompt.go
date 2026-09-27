@@ -2,8 +2,8 @@ package terminal
 
 import (
 	"github.com/briandowns/spinner"
-	"github.com/chzyer/readline"
 	"github.com/manifoldco/promptui"
+	xterm "golang.org/x/term"
 
 	"errors"
 	"io"
@@ -48,23 +48,13 @@ func PromptAnyKeyOrQuit(t Terminal, prompt string) error {
 func stdinRawCharPrompt(t Terminal, prompt string) (byte, error) {
 	stdin := t.IOIn()
 
-	// Enter raw mode to read a single key without waiting for Enter.
-	// Only a terminal can do this; a pipe or file is read as-is.
-	if isTerminal(stdin) {
-		rm := new(readline.RawMode)
-		if err := rm.Enter(); err != nil {
-			return 0, err
-		}
-		defer rm.Exit()
-	}
-
 	// Display initial prompt
 	t.Printf("%s", prompt)
 
 	// Read a single byte from stdin. A closed stdin cannot answer,
 	// which is the same as declining.
 	var b [1]byte
-	if n, err := stdin.Read(b[:]); errors.Is(err, io.EOF) {
+	if n, err := readRaw(stdin, b[:]); errors.Is(err, io.EOF) {
 		return 0, promptui.ErrAbort
 	} else if err != nil {
 		return 0, err
@@ -77,6 +67,21 @@ func stdinRawCharPrompt(t Terminal, prompt string) (byte, error) {
 
 	// Return charaacter
 	return b[0], nil
+}
+
+// readRaw reads from stdin in raw mode, so that a single key is read without
+// waiting for Enter. Only a terminal can do this; a pipe or file is read
+// as-is. The terminal is back to its previous mode before any output.
+func readRaw(stdin io.Reader, b []byte) (int, error) {
+	if fd, ok := terminalFd(stdin); ok {
+		state, err := xterm.MakeRaw(fd)
+		if err != nil {
+			return 0, err
+		}
+		defer xterm.Restore(fd, state)
+	}
+
+	return stdin.Read(b)
 }
 
 // SpinIfTerminal shows a spinner on the error stream until the returned
