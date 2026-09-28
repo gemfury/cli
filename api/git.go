@@ -78,7 +78,7 @@ func (c *Client) GitRename(cc context.Context, repo, newName string) error {
 	return req.doJSON(nil)
 }
 
-// GitRename renames a Gemfury Git repository
+// GitRebuild runs the builder on a Gemfury Git repository, streaming its output
 func (c *Client) GitRebuild(cc context.Context, out io.Writer, repo, revision string) error {
 	path := "/git/repos/{acct}/" + url.PathEscape(repo) + "/builds"
 	if revision != "" {

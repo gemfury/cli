@@ -42,11 +42,9 @@ func TestWhoamiCommandSuccess(t *testing.T) {
 func TestWhoamiCommandUnauthorized(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/users/me", whoamiResponse, 200)
 	testCommandLoginPreCheck(t, []string{"whoami"}, server)
-	server.Close()
 }
 
 func TestWhoamiCommandForbidden(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/users/me", "{}", 403)
-	testCommandForbiddenResponse(t, []string{"whoami"}, server)
-	server.Close()
+	testCommandForbiddenResponse(t, []string{"whoami"}, server, "")
 }

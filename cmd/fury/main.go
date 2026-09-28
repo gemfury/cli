@@ -63,14 +63,11 @@ func interruptible(parent context.Context) (cc context.Context, caught func() os
 // signal that interrupted it, if any. As in a shell, an interrupted command
 // exits with 128 plus the number of the signal, e.g. 130 for Ctrl-C.
 func exitStatus(err error, sig os.Signal) int {
-	switch {
-	case err == nil:
-		return 0
-	case !errors.Is(err, context.Canceled):
-		return 1
+	if !errors.Is(err, context.Canceled) {
+		return cli.ExitStatus(err)
 	}
 
-	// Ctrl-C at a prompt is read as a key, rather than received as a signal
+	// Ctrl-C at a confirmation is read as a key, rather than received as a signal
 	if s, ok := sig.(syscall.Signal); ok {
 		return 128 + int(s)
 	}

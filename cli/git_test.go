@@ -89,14 +89,22 @@ func TestGitRebuildCommandUnauthorized(t *testing.T) {
 	path := "/git/repos/me/repo-name/builds"
 	server := testutil.APIServer(t, "POST", path, gitRebuildResponse, 200)
 	testCommandLoginPreCheck(t, []string{"git", "rebuild", "repo-name"}, server)
-	server.Close()
 }
 
+// The error is about the revision of the repository, when one is given
 func TestGitRebuildCommandForbidden(t *testing.T) {
 	path := "/git/repos/me/repo-name/builds"
 	server := testutil.APIServer(t, "POST", path, "", 403)
-	testCommandForbiddenResponse(t, []string{"git", "rebuild", "repo-name"}, server)
-	server.Close()
+
+	for about, args := range map[string][]string{
+		`Repository "repo-name"`:      {"repo-name"},
+		`Repository "repo-name@v1.0"`: {"repo-name@v1.0"},
+		`Repository "repo-name@v2.0"`: {"repo-name", "--revision", "v2.0"},
+	} {
+		t.Run(about, func(t *testing.T) {
+			testCommandForbiddenResponse(t, append([]string{"git", "rebuild"}, args...), server, about)
+		})
+	}
 }
 
 // ==== GIT RENAME ====
@@ -129,15 +137,13 @@ func TestGitRenameCommandUnauthorized(t *testing.T) {
 	server := testutil.APIServer(t, "PATCH", path, "{}", 200)
 	args := []string{"git", "rename", "repo-name", "new-name"}
 	testCommandLoginPreCheck(t, args, server)
-	server.Close()
 }
 
 func TestGitRenameCommandForbidden(t *testing.T) {
 	path := "/git/repos/me/repo-name"
 	server := testutil.APIServer(t, "PATCH", path, "", 403)
 	args := []string{"git", "rename", "repo-name", "new-name"}
-	testCommandForbiddenResponse(t, args, server)
-	server.Close()
+	testCommandForbiddenResponse(t, args, server, `Repository "repo-name"`)
 }
 
 // ==== GIT DESTROY ====
@@ -223,14 +229,41 @@ func TestGitDestroyCommandUnauthorized(t *testing.T) {
 	path := "/git/repos/me/repo-name"
 	server := testutil.APIServer(t, "DELETE", path, "{}", 200)
 	testCommandLoginPreCheck(t, []string{"git", "destroy", "--force", "repo-name"}, server)
-	server.Close()
 }
 
 func TestGitDestroyCommandForbidden(t *testing.T) {
 	path := "/git/repos/me/repo-name"
 	server := testutil.APIServer(t, "DELETE", path, "", 403)
-	testCommandForbiddenResponse(t, []string{"git", "destroy", "--force", "repo-name"}, server)
-	server.Close()
+	testCommandForbiddenResponse(t, []string{"git", "destroy", "--force", "repo-name"}, server, `Repository "repo-name"`)
+}
+
+// ==== GIT LOCK ====
+
+// A locked repository is refused with a 409 and, in the body, an error that
+// is a string of no type. That is to try again later, unlike the conflict
+// of an existing version. The message is that of the server.
+func TestGitCommandsLocked(t *testing.T) {
+	for _, args := range [][]string{
+		{"git", "destroy", "repo-name", "--force"},
+		{"git", "rename", "repo-name", "new-name"},
+		{"git", "rebuild", "repo-name"},
+		{"git", "config", "set", "repo-name", "KEY=value"},
+		{"git", "config", "unset", "repo-name", "KEY"},
+		{"git", "stack", "set", "repo-name", "stack-name"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			auth := terminal.TestAuther("user", "abc123", nil)
+			term := terminal.NewForTest()
+
+			server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+				mux.HandleFunc("/", respondWith(409, `{"error":"Locked by another request"}`))
+			})
+
+			cc := testContext(t, term, auth, server)
+			expectExitStatus(t, term, runCommand(cc, args), cli.ExitUnavailable)
+			expectErrOutput(t, term, "Error: Repository \"repo-name\": Locked by another request\n")
+		})
+	}
 }
 
 // ==== GIT LIST ====
@@ -269,11 +302,9 @@ func TestGitListCommandSuccess(t *testing.T) {
 func TestGitListCommandUnauthorized(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/git/repos/me", "{}", 200)
 	testCommandLoginPreCheck(t, []string{"git", "list"}, server)
-	server.Close()
 }
 
 func TestGitListCommandForbidden(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/git/repos/me", "", 403)
-	testCommandForbiddenResponse(t, []string{"git", "list"}, server)
-	server.Close()
+	testCommandForbiddenResponse(t, []string{"git", "list"}, server, "")
 }

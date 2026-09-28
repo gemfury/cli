@@ -23,7 +23,17 @@ Environment variables:
   FURY_ACCOUNT   Account to act on, unless --account is given
 
 Without a terminal, or with --no-input, nothing is asked: pass --yes
-to confirm, and set FURY_TOKEN to authenticate.`,
+to confirm, and set FURY_TOKEN to authenticate.
+
+Exit status:
+  0   Success
+  1   Any other error
+  2   Usage: check the arguments and flags, or confirm with --yes
+  3   Not found
+  4   Not authenticated
+  5   Already exists
+  6   Unavailable: try again later
+  130 Interrupted, or 143 when terminated`,
 
 		// Execute reports errors and usage, not Cobra
 		SilenceErrors: true,
@@ -106,8 +116,10 @@ func Execute(cc context.Context, rootCmd *cobra.Command) error {
 	if IsUsageError(err) {
 		fmt.Fprint(errOut, cmd.UsageString())
 	} else if cmd == rootCmd {
-		// Unknown subcommand, or other failure to dispatch
+		// Unknown subcommand, or other failure to dispatch: a usage
+		// error, though with a hint instead of the usage of the root
 		fmt.Fprintf(errOut, "Run '%s --help' for usage.\n", rootCmd.CommandPath())
+		return asUsageError(err)
 	}
 
 	return err

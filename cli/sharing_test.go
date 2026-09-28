@@ -52,13 +52,11 @@ func TestSharingCommandSuccess(t *testing.T) {
 func TestSharingCommandUnauthorized(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/members", "[]", 200)
 	testCommandLoginPreCheck(t, []string{"sharing"}, server)
-	server.Close()
 }
 
 func TestSharingCommandForbidden(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/members", "[]", 403)
-	testCommandForbiddenResponse(t, []string{"sharing"}, server)
-	server.Close()
+	testCommandForbiddenResponse(t, []string{"sharing"}, server, "")
 }
 
 // ==== sharing add ====
@@ -125,15 +123,13 @@ func TestSharingAddCommandUnauthorized(t *testing.T) {
 	server := testutil.APIServer(t, "PUT", path, "{}", 200)
 	args := []string{"sharing", "add", "added@example.com"}
 	testCommandLoginPreCheck(t, args, server)
-	server.Close()
 }
 
 func TestSharingAddForbidden(t *testing.T) {
 	path := "/collaborators/added@example.com"
 	server := testutil.APIServer(t, "PUT", path, "{}", 403)
 	args := []string{"sharing", "add", "added@example.com"}
-	testCommandForbiddenResponse(t, args, server)
-	server.Close()
+	testCommandForbiddenResponse(t, args, server, `Collaborator "added@example.com"`)
 }
 
 // One of three invitations fails: the other two still go through
@@ -192,15 +188,13 @@ func TestSharingRemoveCommandUnauthorized(t *testing.T) {
 	server := testutil.APIServer(t, "DELETE", path, "{}", 200)
 	args := []string{"sharing", "remove", "fired@example.com"}
 	testCommandLoginPreCheck(t, args, server)
-	server.Close()
 }
 
 func TestSharingRemoveForbidden(t *testing.T) {
 	path := "/collaborators/fired@example.com"
 	server := testutil.APIServer(t, "DELETE", path, "{}", 403)
 	args := []string{"sharing", "remove", "fired@example.com"}
-	testCommandForbiddenResponse(t, args, server)
-	server.Close()
+	testCommandForbiddenResponse(t, args, server, `Collaborator "fired@example.com"`)
 }
 
 // ==== accounts ====
@@ -243,11 +237,9 @@ func TestAccountsCommandSuccess(t *testing.T) {
 func TestAccountsCommandUnauthorized(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/collaborations", "[]", 200)
 	testCommandLoginPreCheck(t, []string{"accounts"}, server)
-	server.Close()
 }
 
 func TestAccountsCommandForbidden(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/collaborations", "[]", 403)
-	testCommandForbiddenResponse(t, []string{"accounts"}, server)
-	server.Close()
+	testCommandForbiddenResponse(t, []string{"accounts"}, server, "")
 }

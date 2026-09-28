@@ -19,6 +19,9 @@ import (
 	"time"
 )
 
+// What the API responds with to the start of a browser login
+const loginCreateResponse = `{"browser_url": "https://gemfury.com", "cli_url": "/cli/auth", "token": "xyz"}`
+
 // Login is more or less the same as the "whoami" command
 // because all commands force a login if logged out
 // /login route is already present on APIServer
@@ -81,12 +84,8 @@ func TestLoginCommandInteractiveFallback(t *testing.T) {
 
 	// Fire up test server that returns 501 for /cli/auth
 	server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
-		h.HandleFunc("/cli/auth", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNotImplemented)
-		})
-		h.HandleFunc("/users/me", func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte(whoamiResponse))
-		})
+		h.HandleFunc("/cli/auth", respondWith(http.StatusNotImplemented, ""))
+		h.HandleFunc("/users/me", respondWith(200, whoamiResponse))
 	})
 
 	cc := cli.TestContext(t.Context(), term, auth)
@@ -123,7 +122,7 @@ func TestLoginCommandCancelled(t *testing.T) {
 					if r.Method != "POST" {
 						t.Errorf("Login should not be polled after cancel")
 					}
-					w.Write([]byte(`{"browser_url": "https://gemfury.com", "cli_url": "/cli/auth", "token": "xyz"}`))
+					w.Write([]byte(loginCreateResponse))
 				})
 			})
 
@@ -292,7 +291,6 @@ func TestLoginCommandWithInlineTokenKeepsSaved(t *testing.T) {
 func TestLoginCommandUnauthorized(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/users/me", whoamiResponse, 200)
 	testCommandLoginPreCheck(t, []string{"login"}, server, noLoginOpt)
-	server.Close()
 }
 
 // Logout acts on the saved credentials, whatever FURY_TOKEN holds
@@ -467,9 +465,7 @@ func TestInteractiveLoginCancelled(t *testing.T) {
 
 			// Interactive login is the fallback of a browser login
 			server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
-				h.HandleFunc("/cli/auth", func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusNotImplemented)
-				})
+				h.HandleFunc("/cli/auth", respondWith(http.StatusNotImplemented, ""))
 			})
 
 			// "login" exits quietly
@@ -503,7 +499,7 @@ func pendingLoginServer(t *testing.T, onPoll func()) *httptest.Server {
 	return testutil.APIServerCustom(t, func(h *http.ServeMux) {
 		h.HandleFunc("/cli/auth", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == "POST" {
-				w.Write([]byte(`{"browser_url": "https://gemfury.com", "cli_url": "/cli/auth", "token": "xyz"}`))
+				w.Write([]byte(loginCreateResponse))
 				return
 			}
 			onPoll()
@@ -562,6 +558,52 @@ func TestLoginCommandInterruptedOpeningBrowser(t *testing.T) {
 	}
 
 	expectErrOutput(t, term, "Cancelled\n")
+}
+
+// A browser login is asked about for as long as it is pending, which the
+// API tells by a 404 or a 408, in the body of its response or not. Any
+// other refusal ends the login at once.
+func TestLoginCommandPolling(t *testing.T) {
+	for name, tc := range map[string]struct {
+		polls  []int // Status of each response, in order
+		exp    int
+		stderr string
+	}{
+		"pending, then approved": {[]int{404, 408, 200}, cli.ExitOK, ""},
+		"refused":                {[]int{500}, cli.ExitUnavailable, "Error: Try later (HTTP 500)\n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			auth := terminal.TestAuther("", "", nil)
+			term := terminal.NewForTest()
+
+			var polls atomic.Int32
+			server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+				mux.HandleFunc("/users/me", respondWith(200, whoamiResponse))
+				mux.HandleFunc("GET /cli/auth", func(w http.ResponseWriter, r *http.Request) {
+					switch status := tc.polls[polls.Add(1)-1]; status {
+					case 200:
+						respondWith(200, `{"user": {"email": "u@example.com"}, "token": "token-abc-123"}`)(w, r)
+					case 408:
+						respondWith(408, "")(w, r)
+					default:
+						respondWith(status, `{"error": "Try later"}`)(w, r)
+					}
+				})
+				mux.HandleFunc("POST /cli/auth", respondWith(200, loginCreateResponse))
+			})
+
+			cli.SetLoginPollInterval(t, time.Millisecond)
+			cc := testContext(t, term, auth, server)
+			term.InWrite([]byte("!"))
+
+			expectExitStatus(t, term, runCommand(cc, []string{"login"}), tc.exp)
+			expectErrOutput(t, term, tc.stderr)
+
+			if n := int(polls.Load()); n != len(tc.polls) {
+				t.Errorf("Expected %d polls, got %d", len(tc.polls), n)
+			}
+		})
+	}
 }
 
 // A browser login that is never approved times out, poll in flight or not

@@ -33,7 +33,7 @@ func NewCmdPush() *cobra.Command {
 			}
 
 			// Upload each file and collect errors
-			fails := newFailures(cc, len(args), "uploads")
+			fails := newFailures(cc, len(args), "uploads", "File")
 			for _, path := range args {
 				if fails.interrupted() {
 					break
@@ -76,7 +76,7 @@ func NewCmdPush() *cobra.Command {
 					continue
 				}
 
-				fails.record(err) // Reported by the status line below
+				fails.record(name, err) // Reported by the status line below
 				if errors.Is(err, context.Canceled) {
 					term.Printf("%s- cancelled\n", prefix)
 				} else if errors.Is(err, fs.ErrNotExist) {
@@ -87,6 +87,8 @@ func NewCmdPush() *cobra.Command {
 					term.Printf("%s- unauthorized\n", prefix)
 				} else if errors.Is(err, api.ErrForbidden) {
 					term.Printf("%s- no permission\n", prefix)
+				} else if errors.Is(err, api.ErrAlreadyExists) {
+					term.Printf("%s- this version already exists\n", prefix)
 				} else if ue := (api.UserError{}); errors.As(err, &ue) {
 					term.Printf("%s- %s\n", prefix, ue.ShortError())
 				} else {

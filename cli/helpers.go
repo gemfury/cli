@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -21,4 +22,14 @@ func timeStringWithAgo(t time.Time) string {
 	}
 
 	return out
+}
+
+// splitPackageVersion splits an argument of PACKAGE@VERSION
+// into its two parts, neither of which may be empty
+func splitPackageVersion(arg string) (pkg, ver string, ok bool) {
+	at := strings.LastIndex(arg, "@")
+	if at <= 0 || at == len(arg)-1 {
+		return "", "", false
+	}
+	return arg[:at], arg[at+1:], true
 }

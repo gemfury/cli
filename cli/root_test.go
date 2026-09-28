@@ -128,6 +128,14 @@ func expectErrOutput(t *testing.T, term terminal.TestTerm, stderr string) {
 	}
 }
 
+// expectExitStatus asserts the exit status for the error of a command
+func expectExitStatus(t *testing.T, term terminal.TestTerm, err error, exp int) {
+	t.Helper()
+	if got := cli.ExitStatus(err); got != exp {
+		t.Errorf("Expected exit status %d, got %d with %q", exp, got, term.ErrBytes())
+	}
+}
+
 // expectCredentials asserts what credentials are saved, both empty for none
 func expectCredentials(t *testing.T, auth terminal.Auther, user, token string) {
 	t.Helper()
@@ -158,6 +166,14 @@ func offlineServer(t *testing.T) *httptest.Server {
 			w.WriteHeader(http.StatusNotImplemented)
 		})
 	})
+}
+
+// respondWith handles any request with the given status and body
+func respondWith(status int, body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(status)
+		w.Write([]byte(body))
+	}
 }
 
 // unusedAuther fails any command that consults the saved credentials
@@ -197,22 +213,25 @@ func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Serv
 	}
 }
 
-func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.Server, opts ...testOption) {
+// testCommandForbiddenResponse asserts how a command reports a 403: about
+// what it asked for, e.g. `Package "foo"`, or about nothing when empty
+func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.Server, about string) {
 	t.Helper()
 	auth := terminal.TestAuther("user", "abc123", nil)
 	term := terminal.NewForTest()
-	cc := testContext(t, term, auth, server, opts...)
+	cc := testContext(t, term, auth, server)
 
 	err := runCommand(cc, args)
 	if !errors.Is(err, api.ErrForbidden) {
 		t.Fatalf("Command error: %s", err)
 	}
 
-	// Error is reported exactly once, on stderr, without usage text
-	errStr := string(term.ErrBytes())
-	if exp := "Error: You're not allowed to do this\n"; errStr != exp {
-		t.Errorf("Error should be %q, got %q", exp, errStr)
+	if about != "" {
+		about += ": "
 	}
+
+	// Error is reported exactly once, on stderr, without usage text
+	expectErrOutput(t, term, "Error: "+about+"You're not allowed to do this\n")
 
 	if ob := term.OutBytes(); failedOutRegexp.Match(ob) {
 		t.Errorf("Unexpected output for an API error: %q", ob)
@@ -221,7 +240,7 @@ func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.
 
 // Help never requires authentication, and never contacts the API
 func TestHelpWithoutAuth(t *testing.T) {
-	for _, args := range [][]string{{"help"}, {"help", "push"}, {"git", "--help"}} {
+	for _, args := range [][]string{{"help"}, {"help", "push"}, {"git", "--help"}, {"git"}, {"beta"}} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			server := offlineServer(t)
 
@@ -249,13 +268,21 @@ func TestUsageErrorOutput(t *testing.T) {
 		{[]string{"push"}, "Please specify at least one package file"},
 		{[]string{"yank"}, "Please specify at least one package"},
 		{[]string{"yank", "foo", "bar", "-v", "0.0.1"}, "Use PACKAGE@VERSION for multiple yanks"},
+		{[]string{"yank", "foo", "bar"}, "Invalid package/version specified: foo"},
+		{[]string{"yank", "foo@1.0", "bar@"}, "Invalid package/version specified: bar@"},
+		{[]string{"yank", "", "-v", "1.0"}, "Invalid package/version specified: "},
+		{[]string{"yank", "js:@1.0"}, "Invalid package/version specified: js:@1.0"},
+		{[]string{"yank", "js:", "-v", "1.0"}, "Invalid package/version specified: js:"},
 		{[]string{"beta", "download"}, "Please specify at least one PACKAGE@VERSION"},
+		{[]string{"beta", "download", "foo@1.0", "@1.0"}, "Argument format is PACKAGE@VERSION: @1.0"},
 		{[]string{"beta", "backup"}, "Please specify exactly one destination directory"},
 		{[]string{"git", "rename", "repo"}, "Please specify a repository and its new name"},
 		{[]string{"git", "config", "get", "repo"}, "Please specify a repository and at least one key"},
 		{[]string{"git", "config", "set", "repo", "A=1", "B"}, "Argument has no value: B"},
 		{[]string{"git", "stack", "set", "repo"}, "Please specify a repository and a stack"},
 		{[]string{"sharing", "add"}, "Please specify at least one collaborator"},
+		{[]string{"git", "nosuch"}, `unknown command "nosuch" for "fury git"`},
+		{[]string{"beta", "nosuch"}, `unknown command "nosuch" for "fury beta"`},
 		{[]string{"sharing", "extra"}, `unknown command "extra" for "fury sharing"`},
 		{[]string{"whoami", "extra"}, `unknown command "extra" for "fury whoami"`},
 		{[]string{"logout", "now"}, `unknown command "now" for "fury logout"`},
@@ -305,10 +332,7 @@ func TestUnknownCommandOutput(t *testing.T) {
 
 	term := terminal.NewForTest()
 	cc := testContext(t, term, terminal.TestAuther("", "", nil), server)
-	if err := runCommand(cc, []string{"nosuchcmd"}); err == nil {
-		t.Fatal("Expected error for unknown command")
-	}
-
+	expectExitStatus(t, term, runCommand(cc, []string{"nosuchcmd"}), cli.ExitUsage)
 	expectOutput(t, term, "", "Error: unknown command \"nosuchcmd\" for \"fury\"\nRun 'fury --help' for usage.\n")
 }
 
@@ -353,12 +377,14 @@ func interruptOn(cancel func(), requests *atomic.Int32) http.HandlerFunc {
 }
 
 // An interrupted command stops at the item that it was on: the remaining
-// items are not attempted, and only the interruption is reported
-func TestMultiItemCommandsInterrupted(t *testing.T) {
+// items are not attempted, and only the interruption is reported, which
+// is not about what the command asked for
+func TestCommandsInterrupted(t *testing.T) {
 	for name, tc := range map[string]struct {
 		args   []string
 		stdout string
 	}{
+		"versions":       {[]string{"versions", "foo"}, ""},
 		"push":           {[]string{"push", samplePackagePath(), samplePackagePath()}, "Uploading sample.txt - cancelled\n"},
 		"yank":           {[]string{"yank", "--force", "foo@1.0", "bar@1.0"}, ""},
 		"sharing add":    {[]string{"sharing", "add", "a@example.com", "b@example.com"}, ""},

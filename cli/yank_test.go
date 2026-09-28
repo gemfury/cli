@@ -27,6 +27,7 @@ func TestYankCommandOnePackage(t *testing.T) {
 				t.Errorf("Invalid request: %s %s", r.Method, r.URL.Path)
 			} else if k := q.Get("kind"); k == "js" {
 				w.Write([]byte(versionsResponses[0])) // One page
+				return
 			} else if method := r.Method; method != "GET" {
 				t.Errorf("Invalid method: %s %s", method, r.URL.Path)
 			}
@@ -72,12 +73,6 @@ func TestYankCommandOnePackage(t *testing.T) {
 	} else if outStr := string(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}
-
-	// Fail if no version specified
-	err = runCommandNoErr(cc, []string{"yank", "foo"})
-	if err == nil || !strings.Contains(err.Error(), "Invalid package/version") {
-		t.Errorf("Expected invalid error, got %q", err)
-	}
 }
 
 func TestYankCommandMultiPackage(t *testing.T) {
@@ -114,19 +109,6 @@ func TestYankCommandMultiPackage(t *testing.T) {
 
 	// Expected successful output
 	exp := "Removed \"foo-1.2.3.tgz\"\nRemoved \"foo-3.2.1.tgz\"\n"
-
-	// Failure for multiple packages without version: each is reported, then summarized
-	err := runCommand(cc, []string{"yank", "foo", "bar"})
-	if summary := "2 of 2 lookups failed"; err == nil || err.Error() != summary {
-		t.Errorf("Expected %q, got %v", summary, err)
-	}
-	expectProblems(t, term,
-		"Problem looking up \"foo\": Invalid package/version specified\n",
-		"Problem looking up \"bar\": Invalid package/version specified\n",
-	)
-
-	// Stderr still holds the failures above, so from here on
-	// only the error of each command is checked
 
 	// When nothing is found, we expect "nothing found" error message
 	expNone := "No matching versions found\n"
@@ -222,13 +204,61 @@ func TestYankCommandInterrupted(t *testing.T) {
 func TestYankCommandUnauthorized(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/versions", "[]", 200)
 	testCommandLoginPreCheck(t, []string{"yank", "foo", "-v", "0.0.1"}, server)
-	server.Close()
 }
 
 func TestYankCommandForbidden(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/versions", "", 403)
-	testCommandForbiddenResponse(t, []string{"yank", "foo", "-v", "0.0.1"}, server)
-	server.Close()
+	testCommandForbiddenResponse(t, []string{"yank", "foo", "-v", "0.0.1"}, server, `Version "foo@0.0.1"`)
+}
+
+// Versions that cannot be looked up: each is reported, then summarized.
+// The version follows the last "@", as the name of a package may have one.
+func TestYankCommandLookupFailures(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	server := testutil.APIServer(t, "GET", "/versions", "", 404)
+
+	cc := testContext(t, term, auth, server)
+	err := runCommand(cc, []string{"yank", "foo@1.0", "@scope/bar@1.0", "--force"})
+	expectSummaryError(t, err, api.ErrNotFound, "2 of 2 lookups failed")
+	expectOutput(t, term, "", ""+
+		"Problem looking up \"foo@1.0\": Doesn't look like this exists\n"+
+		"Problem looking up \"@scope/bar@1.0\": Doesn't look like this exists\n"+
+		"Error: 2 of 2 lookups failed\n")
+}
+
+// A single failure is the error of the command, about what it failed on:
+// the version that is looked up, or the file that is removed
+func TestYankCommandSingleFailure(t *testing.T) {
+	for name, tc := range map[string]struct {
+		lookup  http.HandlerFunc
+		message string
+	}{
+		"lookup": {
+			respondWith(404, ""),
+			"Version \"js:foo@0.0.1\": Doesn't look like this exists",
+		},
+		"removal": {
+			respondWith(200, versionsResponses[0]),
+			"File \"foo-1.2.3.tgz\": Doesn't look like this exists",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			auth := terminal.TestAuther("user", "abc123", nil)
+			term := terminal.NewForTest()
+
+			server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+				mux.HandleFunc("GET /versions", tc.lookup)
+				mux.HandleFunc("DELETE /packages/{pid}/versions/{vid}", respondWith(404, ""))
+			})
+
+			cc := testContext(t, term, auth, server)
+			err := runCommand(cc, []string{"yank", "js:foo@0.0.1", "--force"})
+			expectExitStatus(t, term, err, cli.ExitNotFound)
+			expectOutput(t, term, "", "Error: "+tc.message+"\n")
+		})
+	}
 }
 
 // One of two matched versions cannot be removed: the other still is

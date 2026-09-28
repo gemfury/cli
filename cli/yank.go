@@ -6,7 +6,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"context"
-	"errors"
 	"net/url"
 	"strings"
 )
@@ -25,6 +24,11 @@ func NewCmdYank() *cobra.Command {
 				if versionFlag != "" && len(args) > 1 {
 					return usageErrorf("Use PACKAGE@VERSION for multiple yanks")
 				}
+				for _, arg := range args {
+					if _, _, ok := yankTarget(arg, versionFlag); !ok {
+						return usageErrorf("Invalid package/version specified: %s", arg)
+					}
+				}
 				return nil
 			},
 		),
@@ -38,15 +42,16 @@ func NewCmdYank() *cobra.Command {
 
 			// Resolve every argument before removing anything
 			versions := make([]*api.Version, 0, len(args))
-			lookups := newFailures(cc, len(args), "lookups")
+			lookups := newFailures(cc, len(args), "lookups", "Version")
 			for _, arg := range args {
 				if lookups.interrupted() {
 					break
 				}
 
-				pkgVersions, err := lookupVersions(cc, c, arg, versionFlag)
+				pkg, ver, _ := yankTarget(arg, versionFlag) // Valid by the Args check
+				pkgVersions, err := filterVersions(cc, c, pkg, ver)
 				if err != nil {
-					lookups.add("looking up", arg, err)
+					lookups.add("looking up", pkg+"@"+ver, err)
 					continue
 				}
 				versions = append(versions, pkgVersions...)
@@ -67,7 +72,7 @@ func NewCmdYank() *cobra.Command {
 				}
 			}
 
-			removals := newFailures(cc, len(versions), "removals")
+			removals := newFailures(cc, len(versions), "removals", "File")
 			for _, v := range versions {
 				if removals.interrupted() {
 					break
@@ -91,20 +96,17 @@ func NewCmdYank() *cobra.Command {
 	return yankCmd
 }
 
-// lookupVersions resolves one yank argument to its versions. The argument
-// is PACKAGE@VERSION, or a bare package name when the version comes from
-// the --version flag.
-func lookupVersions(cc context.Context, c *api.Client, arg, versionFlag string) ([]*api.Version, error) {
-	pkg, ver := arg, versionFlag
-	if at := strings.LastIndex(arg, "@"); versionFlag == "" && at > 0 {
-		pkg, ver = arg[0:at], arg[at+1:]
+// yankTarget is the package and version that an argument stands for:
+// PACKAGE@VERSION, or a bare package name with the version of the flag.
+// A package given as KIND:NAME must have a name.
+func yankTarget(arg, versionFlag string) (pkg, ver string, ok bool) {
+	pkg, ver, ok = arg, versionFlag, arg != ""
+	if versionFlag == "" {
+		pkg, ver, ok = splitPackageVersion(arg)
 	}
 
-	if pkg == "" || ver == "" {
-		return nil, errors.New("Invalid package/version specified")
-	}
-
-	return filterVersions(cc, c, pkg, ver)
+	_, name, hasKind := strings.Cut(pkg, ":")
+	return pkg, ver, ok && !(hasKind && name == "")
 }
 
 func filterVersions(cc context.Context, c *api.Client, pkg, ver string) ([]*api.Version, error) {

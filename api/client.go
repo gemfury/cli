@@ -22,12 +22,18 @@ const (
 	// Default "User-Agent" header for Gemfury API requests
 	hdrUserAgent = "Gemfury CLI %s"
 
+	// Response header with the ID of the request, to report a failure by
+	hdrRequestID = "X-Request-Id"
+
 	// Default API endpoints
 	defaultPushEndpoint = "https://push.fury.io"
 	defaultEndpoint     = "https://api.fury.io"
 
 	// Most of an unread response body to read, so as to reuse its connection
 	maxDrainBytes = 64 << 10
+
+	// Most of the body of a failed response to decode
+	maxErrorBytes = 64 << 10
 )
 
 var (

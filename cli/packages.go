@@ -84,7 +84,7 @@ func listVersions(cmd *cobra.Command, args []string) error {
 	err = iterateAllPages(cc, func(pageReq *api.PaginationRequest) (*api.PaginationResponse, error) {
 		resp, err := c.PackageVersions(cc, args[0], pageReq)
 		if err != nil {
-			return nil, err
+			return nil, about("Package", args[0], err)
 		}
 
 		versions = append(versions, resp.Versions...)

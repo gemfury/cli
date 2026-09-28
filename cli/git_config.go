@@ -51,7 +51,7 @@ func filteredGitConfig(cmd *cobra.Command, args []string) error {
 
 	config, err := c.GitConfig(cc, args[0])
 	if err != nil {
-		return err
+		return about("Repository", args[0], err)
 	}
 
 	filteredConfig := config
@@ -138,7 +138,7 @@ func gitConfigUpdate(cmd *cobra.Command, repo string, vars map[string]*string) e
 
 	err = c.GitConfigSet(cc, repo, vars)
 	if err != nil {
-		return err
+		return about("Repository", repo, err)
 	}
 
 	term.Printf("Updated %s repository config\n", repo)

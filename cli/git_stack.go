@@ -32,7 +32,7 @@ func gitStackForRepo(cmd *cobra.Command, repoName string) error {
 
 	repo, err := c.GitInfo(cc, repoName)
 	if err != nil {
-		return err
+		return about("Repository", repoName, err)
 	}
 
 	stacks, err := c.GitStacks(cc)
@@ -78,7 +78,7 @@ func gitStackUpdate(cmd *cobra.Command, repo string, newStack string) error {
 
 	err = c.GitStackSet(cc, repo, newStack)
 	if err != nil {
-		return err
+		return about("Repository", repo, err)
 	}
 
 	term.Printf("Updated %s repository build stack\n", repo)

@@ -24,11 +24,11 @@ var (
 
 // NewCmdBeta creates a Cobra command for "beta"
 func NewCmdBeta() *cobra.Command {
-	betaCmd := &cobra.Command{
+	betaCmd := groupCommand(&cobra.Command{
 		Hidden: true,
 		Use:    "beta",
 		Short:  "Experimental features",
-	}
+	})
 
 	betaCmd.AddCommand(NewCmdBackup())
 	betaCmd.AddCommand(NewCmdDownload())
@@ -41,8 +41,18 @@ func NewCmdDownload() *cobra.Command {
 	return &cobra.Command{
 		Use:   "download PACKAGE@VERSION...",
 		Short: "Download a package to the current directory",
-		Args:  usageArgs(cobra.MinimumNArgs(1), "Please specify at least one PACKAGE@VERSION"),
-		RunE:  downloadVersions,
+		Args: cobra.MatchAll(
+			usageArgs(cobra.MinimumNArgs(1), "Please specify at least one PACKAGE@VERSION"),
+			func(cmd *cobra.Command, args []string) error {
+				for _, arg := range args {
+					if _, _, ok := splitPackageVersion(arg); !ok {
+						return usageErrorf("Argument format is PACKAGE@VERSION: %s", arg)
+					}
+				}
+				return nil
+			},
+		),
+		RunE: downloadVersions,
 	}
 }
 
@@ -53,7 +63,7 @@ func downloadVersions(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fails := newFailures(cc, len(args), "downloads")
+	fails := newFailures(cc, len(args), "downloads", "Version")
 	for _, arg := range args {
 		if fails.interrupted() {
 			break
@@ -68,12 +78,7 @@ func downloadVersions(cmd *cobra.Command, args []string) error {
 // downloadArg resolves a PACKAGE@VERSION argument and
 // downloads its file into the current directory
 func downloadArg(cc context.Context, c *api.Client, arg string) error {
-	at := strings.LastIndex(arg, "@")
-	if at <= 0 {
-		return errors.New("Argument format: PACKAGE@VERSION")
-	}
-	pkg, ver := arg[0:at], arg[at+1:]
-
+	pkg, ver, _ := splitPackageVersion(arg) // Valid by the Args check
 	v, err := c.Version(cc, pkg, ver)
 	if err != nil {
 		return err
@@ -134,7 +139,7 @@ func backupEverything(cmd *cobra.Command, args []string, kindFlag string) error 
 			}
 
 			if err := backupVersion(cc, c, v, destDir); err != nil {
-				return nil, err
+				return nil, about("Version", v.Package.Name+"@"+v.Version, err)
 			}
 		}
 

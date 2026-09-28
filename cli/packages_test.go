@@ -57,13 +57,11 @@ func TestPackagesCommandSuccess(t *testing.T) {
 func TestPackagesCommandUnauthorized(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/packages", "[]", 200)
 	testCommandLoginPreCheck(t, []string{"packages"}, server)
-	server.Close()
 }
 
 func TestPackagesCommandForbidden(t *testing.T) {
 	server := testutil.APIServer(t, "GET", "/packages", "[]", 403)
-	testCommandForbiddenResponse(t, []string{"packages"}, server)
-	server.Close()
+	testCommandForbiddenResponse(t, []string{"packages"}, server, "")
 }
 
 // ==== versions ====
@@ -133,14 +131,12 @@ func TestVersionsCommandUnauthorized(t *testing.T) {
 	path := "/packages/pkg-name/versions"
 	server := testutil.APIServer(t, "GET", path, "[]", 200)
 	testCommandLoginPreCheck(t, []string{"versions", "pkg-name"}, server)
-	server.Close()
 }
 
 func TestVersionsCommandForbidden(t *testing.T) {
 	path := "/packages/pkg-name/versions"
 	server := testutil.APIServer(t, "GET", path, "[]", 403)
-	testCommandForbiddenResponse(t, []string{"versions", "pkg-name"}, server)
-	server.Close()
+	testCommandForbiddenResponse(t, []string{"versions", "pkg-name"}, server, `Package "pkg-name"`)
 }
 
 // Some strings come from TabWriter with variable spacing

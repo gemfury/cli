@@ -14,10 +14,10 @@ var repoArg = usageArgs(cobra.ExactArgs(1), "Please specify exactly one reposito
 
 // Root for Git subcommands
 func NewCmdGitRoot() *cobra.Command {
-	gitCmd := &cobra.Command{
+	gitCmd := groupCommand(&cobra.Command{
 		Use:   "git",
 		Short: "Git repository commands",
-	}
+	})
 
 	gitCmd.AddCommand(NewCmdGitConfig())
 	gitCmd.AddCommand(NewCmdGitDestroy())
@@ -67,7 +67,7 @@ func NewCmdGitDestroy() *cobra.Command {
 
 			err = c.GitDestroy(cc, args[0], resetOnly)
 			if err != nil {
-				return err
+				return about("Repository", args[0], err)
 			}
 
 			term.Printf("%s %s repository\n", done, args[0])
@@ -99,7 +99,7 @@ func NewCmdGitRename() *cobra.Command {
 
 			err = c.GitRename(cc, args[0], args[1])
 			if err != nil {
-				return err
+				return about("Repository", args[0], err)
 			}
 
 			term.Printf("Renamed %s repository to %s\n", args[0], args[1])
@@ -110,7 +110,7 @@ func NewCmdGitRename() *cobra.Command {
 	return renameCmd
 }
 
-// NewCmdGitConfigSet sets build configuration keys
+// NewCmdGitRebuild runs the builder on a repository
 func NewCmdGitRebuild() *cobra.Command {
 	var revisionFlag string
 
@@ -134,19 +134,14 @@ func NewCmdGitRebuild() *cobra.Command {
 				repo, rev = repo[0:at], repo[at+1:]
 			}
 
-			msg := fmt.Sprintf("Building %s repository", repo)
+			msg, name := "Building "+repo+" repository", repo
 			if rev != "" {
-				msg = msg + " at " + rev
+				msg, name = msg+" at "+rev, name+"@"+rev
 			}
-			msg = msg + " ...\n"
 
-			term.Printf("%s", msg)
+			term.Printf("%s ...\n", msg)
 			err = c.GitRebuild(cc, term.IOOut(), repo, rev)
-			if err != nil {
-				return err
-			}
-
-			return nil
+			return about("Repository", name, err)
 		},
 	}
 

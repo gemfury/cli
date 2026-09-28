@@ -1,6 +1,9 @@
 package main
 
 import (
+	"github.com/gemfury/cli/api"
+	"github.com/gemfury/cli/cli"
+
 	"context"
 	"errors"
 	"fmt"
@@ -21,6 +24,7 @@ func TestExitStatus(t *testing.T) {
 		"success, late signal":    {nil, syscall.SIGTERM, 0},
 		"failure":                 {errors.New("Failed"), nil, 1},
 		"failure, late signal":    {errors.New("Failed"), syscall.SIGINT, 1},
+		"failure, of its status":  {api.ErrNotFound, nil, cli.ExitNotFound},
 		"interrupted by SIGINT":   {cancelled, syscall.SIGINT, 130},
 		"interrupted by SIGTERM":  {cancelled, syscall.SIGTERM, 143},
 		"interrupted at a prompt": {context.Canceled, nil, 130},

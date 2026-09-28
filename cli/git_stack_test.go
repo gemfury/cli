@@ -52,14 +52,12 @@ func TestGitStackCommandSuccess(t *testing.T) {
 func TestGitStackCommandUnauthorized(t *testing.T) {
 	server := testGitStackServer(t)
 	testCommandLoginPreCheck(t, []string{"git", "stack", "repo-name"}, server)
-	server.Close()
 }
 
 func TestGitStackCommandForbidden(t *testing.T) {
 	path := "/git/repos/me/repo-name"
 	server := testutil.APIServer(t, "GET", path, "", 403)
-	testCommandForbiddenResponse(t, []string{"git", "stack", "repo-name"}, server)
-	server.Close()
+	testCommandForbiddenResponse(t, []string{"git", "stack", "repo-name"}, server, `Repository "repo-name"`)
 }
 
 func testGitStackServer(t *testing.T) *httptest.Server {
@@ -105,12 +103,10 @@ func TestGitStackSetCommandUnauthorized(t *testing.T) {
 	path := "/git/repos/me/repo-name"
 	server := testutil.APIServer(t, "PATCH", path, "{}", 200)
 	testCommandLoginPreCheck(t, []string{"git", "stack", "set", "repo-name", "fury-22"}, server)
-	server.Close()
 }
 
 func TestGitStackSetCommandForbidden(t *testing.T) {
 	path := "/git/repos/me/repo-name"
 	server := testutil.APIServer(t, "PATCH", path, "", 403)
-	testCommandForbiddenResponse(t, []string{"git", "stack", "set", "repo-name", "fury-22"}, server)
-	server.Close()
+	testCommandForbiddenResponse(t, []string{"git", "stack", "set", "repo-name", "fury-22"}, server, `Repository "repo-name"`)
 }

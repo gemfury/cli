@@ -94,7 +94,6 @@ func TestPushCommandUnauthorized(t *testing.T) {
 	server := testutil.APIServer(t, "POST", "/uploads", "[]", 200)
 	args := []string{"push", samplePackagePath()}
 	testCommandLoginPreCheck(t, args, server)
-	server.Close()
 }
 
 func TestPushCommandForbidden(t *testing.T) {
@@ -110,7 +109,62 @@ func TestPushCommandForbidden(t *testing.T) {
 	}
 
 	// Status line on stdout, only the error on stderr
-	expectOutput(t, term, "Uploading sample.txt - no permission\n", "Error: You're not allowed to do this\n")
+	expectOutput(t, term, "Uploading sample.txt - no permission\n", "Error: File \"sample.txt\": You're not allowed to do this\n")
+}
+
+// What the API responds with, and a 409, to a version that is pushed
+// again: a list, with an error for each file of the upload
+const duplicateResponse = `[{"error":{"type":"DupeVersion","message":"Version already exists"},"errors":{"base":"Version already exists"}}]`
+
+// The status line of a refused file is by the type of its error, which
+// tells an existing version from a locked repository: both are a 409
+func TestPushCommandRefused(t *testing.T) {
+	for name, tc := range map[string]struct {
+		status  int
+		body    string
+		short   string // In the status line
+		message string
+		exp     int
+	}{
+		"duplicate": {409, duplicateResponse, "this version already exists", "Version already exists", cli.ExitExists},
+		"corrupt":   {422, `[{"error":{"type":"GemVersionError","message":"Invalid version"}}]`, "corrupt package file", "Invalid version", cli.ExitError},
+		"otherwise": {422, `[{"error":{"type":"Invalid","message":"Name is taken"}}]`, "Name is taken", "Name is taken", cli.ExitError},
+	} {
+		t.Run(name, func(t *testing.T) {
+			auth := terminal.TestAuther("user", "abc123", nil)
+			term := terminal.NewForTest()
+
+			server := testutil.APIServer(t, "POST", "/uploads", tc.body, tc.status)
+
+			cc := testContext(t, term, auth, server)
+			err := runCommand(cc, []string{"push", "--quiet", samplePackagePath()})
+			expectExitStatus(t, term, err, tc.exp)
+			expectOutput(t, term,
+				"Uploading sample.txt - "+tc.short+"\n",
+				"Error: File \"sample.txt\": "+tc.message+"\n")
+		})
+	}
+}
+
+// A failure of the server has what to report it by in the status line
+// of its file, as stderr has only the summary of several
+func TestPushCommandServerFailure(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/uploads", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Request-Id", "req-1")
+			w.WriteHeader(502)
+		})
+	})
+
+	cc := testContext(t, term, auth, server)
+	err := runCommand(cc, []string{"push", "--quiet", samplePackagePath(), samplePackagePath()})
+	expectSummaryError(t, err, api.ErrFuryServer, "2 of 2 uploads failed")
+
+	const status = "Uploading sample.txt - Something went wrong. Please contact support. (HTTP 502, request ID req-1)\n"
+	expectOutput(t, term, status+status, "Error: 2 of 2 uploads failed\n")
 }
 
 // One missing file among two: the other is still uploaded, each file gets

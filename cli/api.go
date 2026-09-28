@@ -73,14 +73,17 @@ func flagOrEnv(flag, env string) string {
 	return strings.TrimSpace(os.Getenv(env))
 }
 
-// skipAuthAnnotation marks a command that must run without authentication,
-// such as the ones that manage the session itself
+// skipAuthKey is the annotation of a command that skips authentication
 const skipAuthKey = "fury.skip-auth"
 
-var skipAuthAnnotation = map[string]string{skipAuthKey: "true"}
+// skipAuth marks a command that must run without authentication,
+// such as the ones that manage the session itself
+func skipAuth() map[string]string {
+	return map[string]string{skipAuthKey: "true"}
+}
 
 // skipsAuth reports whether cmd runs without authentication: commands
-// annotated with skipAuthAnnotation, plus Cobra's built-in top-level
+// annotated with skipAuth, plus Cobra's built-in top-level
 // help and shell-completion commands
 func skipsAuth(cmd *cobra.Command) bool {
 	if cmd.Annotations[skipAuthKey] == "true" {
@@ -169,6 +172,9 @@ func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResp
 // loginPollTimeout is how long browserLogin waits for the user to approve
 var loginPollTimeout = 3 * time.Minute
 
+// loginPollInterval is how long browserLogin waits between polls
+var loginPollInterval = 500 * time.Millisecond
+
 // browserLogin is a challenge/response authentication via browser
 func browserLogin(cmd *cobra.Command) (*api.LoginResponse, error) {
 	cc := cmd.Context()
@@ -220,7 +226,7 @@ func browserLogin(cmd *cobra.Command) (*api.LoginResponse, error) {
 		return resp, err
 	},
 		// We retry with constant backoff waiting for user to approve login
-		backoff.WithBackOff(backoff.NewConstantBackOff(500*time.Millisecond)),
+		backoff.WithBackOff(backoff.NewConstantBackOff(loginPollInterval)),
 		backoff.WithMaxElapsedTime(0), // Limited by pollCtx
 	)
 
