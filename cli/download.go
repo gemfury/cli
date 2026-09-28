@@ -41,6 +41,8 @@ func NewCmdDownload() *cobra.Command {
 	return &cobra.Command{
 		Use:   "download PACKAGE@VERSION...",
 		Short: "Download a package to the current directory",
+		Example: `  fury beta download package@1.0.0
+  fury beta download package@1.0.0 other@2.1.0`,
 		Args: cobra.MatchAll(
 			usageArgs(cobra.MinimumNArgs(1), "Please specify at least one PACKAGE@VERSION"),
 			func(cmd *cobra.Command, args []string) error {
@@ -95,14 +97,16 @@ func NewCmdBackup() *cobra.Command {
 	backupCmd := &cobra.Command{
 		Use:   "backup DIR",
 		Short: "Save all files to a directory",
-		Args:  usageArgs(cobra.ExactArgs(1), "Please specify exactly one destination directory"),
+		Example: `  fury beta backup ./backup
+  fury beta backup ./backup --kind js`,
+		Args: usageArgs(cobra.ExactArgs(1), "Please specify exactly one destination directory"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return backupEverything(cmd, args, kindFlag)
 		},
 	}
 
 	// Flags and options
-	backupCmd.Flags().StringVar(&kindFlag, "kind", "", "Filter to one kind of package")
+	backupCmd.Flags().StringVar(&kindFlag, "kind", "", "Filter to one kind of package: "+packageKinds)
 
 	return backupCmd
 }
@@ -125,7 +129,7 @@ func backupEverything(cmd *cobra.Command, args []string, kindFlag string) error 
 		return err
 	}
 
-	// Paginate over package listings until no more pages
+	// Paginate over version listings until no more pages
 	return iterateAll(cc, false, func(pageReq *api.PaginationRequest) (*api.PaginationResponse, error) {
 		resp, err := c.DumpVersions(cc, pageReq, kindFlag)
 		if err != nil {

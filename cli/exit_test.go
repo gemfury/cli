@@ -66,19 +66,13 @@ func TestExitStatus(t *testing.T) {
 
 // The help of the root command lists each of the exit statuses
 func TestExitStatusHelp(t *testing.T) {
-	term := terminal.NewForTest()
-	cc := testContext(t, term, terminal.TestAuther("", "", nil), offlineServer(t))
-	if err := runCommandNoErr(cc, []string{"--help"}); err != nil {
-		t.Fatal(err)
-	}
-
-	out := term.OutBytes()
+	out := helpOutput(t, "--help")
 	for _, status := range []int{
 		cli.ExitOK, cli.ExitError, cli.ExitUsage, cli.ExitNotFound,
 		cli.ExitAuth, cli.ExitExists, cli.ExitUnavailable, 130, 143,
 	} {
 		listed := regexp.MustCompile(fmt.Sprintf(`(?m)^  .*\b%d\b`, status))
-		if !listed.Match(out) {
+		if !listed.MatchString(out) {
 			t.Errorf("Expected exit status %d in help, got %q", status, out)
 		}
 	}

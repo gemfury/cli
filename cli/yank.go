@@ -18,6 +18,15 @@ func NewCmdYank() *cobra.Command {
 	yankCmd := &cobra.Command{
 		Use:   "yank PACKAGE@VERSION...",
 		Short: "Remove a package version",
+		Long: `Remove a package version, once confirmed.
+
+If packages of different kinds share a name, prefix the kind, as
+KIND:PACKAGE@VERSION. The kinds are:
+  ` + packageKinds,
+		Example: `  fury yank package@1.0.0
+  fury yank package@1.0.0 other@2.1.0 --force
+  fury yank package --version 1.0.0
+  fury yank js:package@1.0.0`,
 		Args: cobra.MatchAll(
 			usageArgs(cobra.MinimumNArgs(1), "Please specify at least one package"),
 			func(cmd *cobra.Command, args []string) error {
@@ -91,7 +100,7 @@ func NewCmdYank() *cobra.Command {
 
 	// Flags and options
 	yankCmd.Flags().BoolVarP(&forceFlag, "force", "f", false, "Skip confirmation")
-	yankCmd.Flags().StringVarP(&versionFlag, "version", "v", "", "Version")
+	yankCmd.Flags().StringVarP(&versionFlag, "version", "v", "", "Version, for a PACKAGE given without one")
 
 	return yankCmd
 }
@@ -121,7 +130,7 @@ func filterVersions(cc context.Context, c *api.Client, pkg, ver string) ([]*api.
 		filter["kind"] = []string{kind}
 	}
 
-	// Paginate over package listings until no more pages
+	// Paginate over version listings until no more pages
 	err := iterateAllPages(cc, func(pageReq *api.PaginationRequest) (*api.PaginationResponse, error) {
 		resp, err := c.Versions(cc, filter, pageReq)
 		if err != nil {

@@ -36,24 +36,10 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// Without a command, the root shows its help
 func TestRootCommand(t *testing.T) {
-	auth := terminal.TestAuther("", "", nil)
-	term := terminal.NewForTest()
-
-	// Fire up test server (error on everything)
-	server := testutil.APIServer(t, "", "/", "", 501)
-
-	cc := cli.TestContext(t.Context(), term, auth)
-	flags := ctx.GlobalFlags(cc)
-	flags.Endpoint = server.URL
-
-	if err := runCommandNoErr(cc, []string{""}); err != nil {
-		t.Fatal(err)
-	}
-
-	outStr := string(term.OutBytes())
-	if exp := "See https://gemfury.com/help/gemfury-cli\n"; !strings.HasPrefix(outStr, exp) {
-		t.Errorf("Expected output to start with %q, got %q", exp, outStr)
+	if out, exp := helpOutput(t, ""), helpOutput(t, "--help"); out != exp {
+		t.Errorf("Expected output to be %q, got %q", exp, out)
 	}
 }
 
@@ -74,6 +60,27 @@ func runCommandNoErr(cc context.Context, args []string) error {
 	}
 
 	return nil
+}
+
+// helpOutput runs a command that only shows help, and returns its stdout.
+// It has no credentials, and any API request fails the test.
+func helpOutput(t *testing.T, args ...string) string {
+	t.Helper()
+	term := terminal.NewForTest()
+	cc := testContext(t, term, terminal.TestAuther("", "", nil), offlineServer(t))
+	if err := runCommandNoErr(cc, args); err != nil {
+		t.Fatal(err)
+	}
+	return string(term.OutBytes())
+}
+
+// allCommands lists cmd and every command below it
+func allCommands(cmd *cobra.Command) []*cobra.Command {
+	cmds := []*cobra.Command{cmd}
+	for _, sub := range cmd.Commands() {
+		cmds = append(cmds, allCommands(sub)...)
+	}
+	return cmds
 }
 
 // testContext builds a command context with both API endpoints pointed at server
@@ -238,25 +245,6 @@ func testCommandForbiddenResponse(t *testing.T, args []string, server *httptest.
 	}
 }
 
-// Help never requires authentication, and never contacts the API
-func TestHelpWithoutAuth(t *testing.T) {
-	for _, args := range [][]string{{"help"}, {"help", "push"}, {"git", "--help"}, {"git"}, {"beta"}} {
-		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			server := offlineServer(t)
-
-			term := terminal.NewForTest()
-			cc := testContext(t, term, terminal.TestAuther("", "", nil), server)
-			if err := runCommandNoErr(cc, args); err != nil {
-				t.Error(err)
-			}
-
-			if outStr := string(term.OutBytes()); !strings.Contains(outStr, "Usage:") {
-				t.Errorf("Expected help on stdout, got %q", outStr)
-			}
-		})
-	}
-}
-
 // Wrong arguments or flags are usage errors, caught before authentication,
 // so a logged-out user is not sent to log in first
 func TestUsageErrorOutput(t *testing.T) {
@@ -315,16 +303,11 @@ func TestUsageErrorOutput(t *testing.T) {
 func TestRunnableCommandsDeclareArgs(t *testing.T) {
 	cc := cli.TestContext(t.Context(), terminal.NewForTest(), terminal.TestAuther("", "", nil))
 
-	var check func(cmd *cobra.Command)
-	check = func(cmd *cobra.Command) {
+	for _, cmd := range allCommands(cli.NewRootCommand(cc)) {
 		if cmd.Runnable() && cmd.Args == nil {
 			t.Errorf("Command %q has no Args check", cmd.CommandPath())
 		}
-		for _, sub := range cmd.Commands() {
-			check(sub)
-		}
 	}
-	check(cli.NewRootCommand(cc))
 }
 
 func TestUnknownCommandOutput(t *testing.T) {

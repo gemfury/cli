@@ -12,8 +12,10 @@ import (
 // NewCmdLogout invalidates session and wipes credentials
 func NewCmdLogout() *cobra.Command {
 	logoutCmd := &cobra.Command{
-		Use:         "logout",
-		Short:       "Clear CLI session credentials",
+		Use:   "logout",
+		Short: "Clear CLI session credentials",
+		Example: `  fury logout
+  fury logout --yes`,
 		Args:        noArgs,
 		Annotations: skipAuth(),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -81,8 +83,17 @@ func NewCmdLogin() *cobra.Command {
 	var interactiveFlag bool
 
 	loginCmd := &cobra.Command{
-		Use:         "login",
-		Short:       "Authenticate into Gemfury account",
+		Use:   "login",
+		Short: "Authenticate into Gemfury account",
+		Long: `Authenticate into Gemfury account, and save the session for the
+commands that follow. Login is by the browser, or with --interactive
+by email and password at the terminal.
+
+With a token, by --api-token or FURY_TOKEN, that token is verified and
+nothing is saved.`,
+		Example: `  fury login
+  fury login --interactive
+  FURY_TOKEN=token fury login`,
 		Args:        noArgs,
 		Annotations: skipAuth(),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -135,7 +146,7 @@ func NewCmdLogin() *cobra.Command {
 	}
 
 	// Flags and options
-	loginCmd.Flags().BoolVar(&interactiveFlag, "interactive", false, "Interactive login")
+	loginCmd.Flags().BoolVar(&interactiveFlag, "interactive", false, "Login by email and password, not by the browser")
 
 	return loginCmd
 }

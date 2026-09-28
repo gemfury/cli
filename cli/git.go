@@ -38,7 +38,12 @@ func NewCmdGitDestroy() *cobra.Command {
 		Use:     "destroy REPO",
 		Aliases: []string{"reset"},
 		Short:   "Remove Git repository",
-		Args:    repoArg,
+		Long: `Remove Git repository, once confirmed. As "reset", or with
+--reset-only, the repository is reset and not removed.`,
+		Example: `  fury git destroy my-repo
+  fury git destroy my-repo --force
+  fury git reset my-repo`,
+		Args: repoArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cc := cmd.Context()
 			term := ctx.Terminal(cc)
@@ -85,9 +90,10 @@ func NewCmdGitDestroy() *cobra.Command {
 // NewCmdGitRename generates the Cobra command for "git:rename"
 func NewCmdGitRename() *cobra.Command {
 	renameCmd := &cobra.Command{
-		Use:   "rename REPO NEWNAME",
-		Short: "Rename a Git repository",
-		Args:  usageArgs(cobra.ExactArgs(2), "Please specify a repository and its new name"),
+		Use:     "rename REPO NEWNAME",
+		Short:   "Rename a Git repository",
+		Example: `  fury git rename my-repo new-name`,
+		Args:    usageArgs(cobra.ExactArgs(2), "Please specify a repository and its new name"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			term := ctx.Terminal(cmd.Context())
 
@@ -117,7 +123,10 @@ func NewCmdGitRebuild() *cobra.Command {
 	rebuildCmd := &cobra.Command{
 		Use:   "rebuild REPO",
 		Short: "Run the builder on the repo",
-		Args:  repoArg,
+		Example: `  fury git rebuild my-repo
+  fury git rebuild my-repo --revision v1.0.0
+  fury git rebuild my-repo@v1.0.0`,
+		Args: repoArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			term := ctx.Terminal(cmd.Context())
 
@@ -146,18 +155,20 @@ func NewCmdGitRebuild() *cobra.Command {
 	}
 
 	// Flags and options
-	rebuildCmd.Flags().StringVarP(&revisionFlag, "revision", "r", "", "Revision")
+	rebuildCmd.Flags().StringVarP(&revisionFlag, "revision", "r", "", "Revision to build: a branch, a tag, or a commit")
 
 	return rebuildCmd
 }
 
-// NewCmdGitConfigSet lists Git repositories
+// NewCmdGitList lists Git repositories
 func NewCmdGitList() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List repos in this account",
-		Args:  noArgs,
-		RunE:  listRepos,
+		Example: `  fury git list
+  fury git list --account my-org`,
+		Args: noArgs,
+		RunE: listRepos,
 	}
 }
 
@@ -171,7 +182,7 @@ func listRepos(cmd *cobra.Command, args []string) error {
 
 	repos := []*api.GitRepo{}
 
-	// Paginate over package listings until no more pages
+	// Paginate over repo listings until no more pages
 	err = iterateAllPages(cc, func(pageReq *api.PaginationRequest) (*api.PaginationResponse, error) {
 		resp, err := c.GitList(cc, pageReq)
 		if err != nil {

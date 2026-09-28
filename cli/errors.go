@@ -63,12 +63,16 @@ func noArgs(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// groupKey is the annotation of a command that only groups subcommands
+const groupKey = "fury.group"
+
 // groupCommand makes cmd a parent that only groups subcommands. Run by
 // itself it shows its help, without authentication; an unknown subcommand
 // is a usage error, as it is at the root.
 func groupCommand(cmd *cobra.Command) *cobra.Command {
 	cmd.Args = noArgs
 	cmd.Annotations = skipAuth()
+	cmd.Annotations[groupKey] = "true"
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	}

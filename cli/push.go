@@ -23,7 +23,10 @@ func NewCmdPush() *cobra.Command {
 	pushCmd := &cobra.Command{
 		Use:   "push FILE...",
 		Short: "Upload a new version of a package",
-		Args:  usageArgs(cobra.MinimumNArgs(1), "Please specify at least one package file"),
+		Example: `  fury push package-1.0.0.tgz
+  fury push --public package-1.0.0.gem package-1.1.0.gem
+  fury push --quiet package.deb --account my-org`,
+		Args: usageArgs(cobra.MinimumNArgs(1), "Please specify at least one package file"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cc := cmd.Context()
 			term := ctx.Terminal(cc)

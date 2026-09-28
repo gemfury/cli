@@ -17,8 +17,11 @@ func NewCmdGitConfig() *cobra.Command {
 	gitConfigCmd := &cobra.Command{
 		Use:   "config REPO",
 		Short: "Configure Git build",
-		Args:  repoArg,
-		RunE:  filteredGitConfig,
+		Long: `List the build environment of a Git repository,
+or get, set, and unset its keys.`,
+		Example: `  fury git config my-repo`,
+		Args:    repoArg,
+		RunE:    filteredGitConfig,
 	}
 
 	gitConfigCmd.AddCommand(NewCmdGitConfigSet())
@@ -33,8 +36,10 @@ func NewCmdGitConfigGet() *cobra.Command {
 	gitConfigGetCmd := &cobra.Command{
 		Use:   "get REPO KEY...",
 		Short: "Get Git build environment key",
-		Args:  usageArgs(cobra.MinimumNArgs(2), "Please specify a repository and at least one key"),
-		RunE:  filteredGitConfig,
+		Example: `  fury git config get my-repo KEY
+  fury git config get my-repo KEY OTHER`,
+		Args: usageArgs(cobra.MinimumNArgs(2), "Please specify a repository and at least one key"),
+		RunE: filteredGitConfig,
 	}
 
 	return gitConfigGetCmd
@@ -84,6 +89,8 @@ func NewCmdGitConfigSet() *cobra.Command {
 	gitConfigSetCmd := &cobra.Command{
 		Use:   "set REPO KEY=VAL...",
 		Short: "Set Git build environment key",
+		Example: `  fury git config set my-repo KEY=value
+  fury git config set my-repo KEY=value OTHER=value`,
 		Args: cobra.MatchAll(
 			usageArgs(cobra.MinimumNArgs(2), "Please specify a repository and at least one KEY=VALUE"),
 			func(cmd *cobra.Command, args []string) error {
@@ -114,7 +121,9 @@ func NewCmdGitConfigUnset() *cobra.Command {
 	gitConfigUnsetCmd := &cobra.Command{
 		Use:   "unset REPO KEY...",
 		Short: "Remove Git build environment key",
-		Args:  usageArgs(cobra.MinimumNArgs(2), "Please specify a repository and at least one KEY"),
+		Example: `  fury git config unset my-repo KEY
+  fury git config unset my-repo KEY OTHER`,
+		Args: usageArgs(cobra.MinimumNArgs(2), "Please specify a repository and at least one KEY"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			vars := map[string]*string{}
 			for _, key := range args[1:] {

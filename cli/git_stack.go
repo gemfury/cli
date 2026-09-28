@@ -5,12 +5,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCmdGitStack is the root for Git Config
+// NewCmdGitStack is the root for Git Stack
 func NewCmdGitStack() *cobra.Command {
 	gitStackCmd := &cobra.Command{
 		Use:   "stack REPO",
 		Short: "Configure Git stack",
-		Args:  repoArg,
+		Long: `List the stacks that a repository can be built on, marking
+the current one, or set another.`,
+		Example: `  fury git stack my-repo`,
+		Args:    repoArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return gitStackForRepo(cmd, args[0])
 		},
@@ -21,7 +24,7 @@ func NewCmdGitStack() *cobra.Command {
 	return gitStackCmd
 }
 
-// Filtered/unfiltered retrieval of Git Config for commands above
+// gitStackForRepo lists the build stacks, marking that of the repo
 func gitStackForRepo(cmd *cobra.Command, repoName string) error {
 	cc := cmd.Context()
 	term := ctx.Terminal(cc)
@@ -54,12 +57,14 @@ func gitStackForRepo(cmd *cobra.Command, repoName string) error {
 	return nil
 }
 
-// NewCmdGitStackSet updates one or more configuration keys
+// NewCmdGitStackSet sets the build stack of a repo
 func NewCmdGitStackSet() *cobra.Command {
 	gitStackSetCmd := &cobra.Command{
-		Use:   "set REPO STACK",
-		Short: "Set Git stack for repo",
-		Args:  usageArgs(cobra.ExactArgs(2), "Please specify a repository and a stack"),
+		Use:     "set REPO STACK",
+		Short:   "Set Git stack for repo",
+		Long:    `Set Git stack for repo, to one that "fury git stack REPO" lists.`,
+		Example: `  fury git stack set my-repo NAME`,
+		Args:    usageArgs(cobra.ExactArgs(2), "Please specify a repository and a stack"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return gitStackUpdate(cmd, args[0], args[1])
 		},

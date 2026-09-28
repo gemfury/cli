@@ -24,6 +24,10 @@ func timeStringWithAgo(t time.Time) string {
 	return out
 }
 
+// packageKinds lists the package kinds of the API, for help only. They are
+// not validated here, so a new kind can be used before a release lists it.
+const packageKinds = "ruby, js, python, php, deb, rpm, bower, nuget, maven, go"
+
 // splitPackageVersion splits an argument of PACKAGE@VERSION
 // into its two parts, neither of which may be empty
 func splitPackageVersion(arg string) (pkg, ver string, ok bool) {

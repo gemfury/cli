@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"github.com/spf13/cobra"
+
 	"testing"
 	"time"
 )
@@ -20,6 +22,14 @@ func setDuring[T any](t *testing.T, v *T, to T) {
 	prev := *v
 	t.Cleanup(func() { *v = prev })
 	*v = to
+}
+
+// PackageKinds exposes the package kinds listed in help
+const PackageKinds = packageKinds
+
+// IsGroup reports whether cmd only groups subcommands (see groupCommand)
+func IsGroup(cmd *cobra.Command) bool {
+	return cmd.Annotations[groupKey] == "true"
 }
 
 // AsUsageError makes a usage error of err, which remains its cause

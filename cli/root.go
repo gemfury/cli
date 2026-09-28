@@ -16,7 +16,12 @@ func NewRootCommand(cc context.Context) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "fury",
 		Short: "Command line interface to Gemfury API",
-		Long: `See https://gemfury.com/help/gemfury-cli
+		Long: `Manage the packages, collaborators, and Git repositories of a Gemfury
+account. See https://gemfury.com/help/gemfury-cli
+
+Commands act on your own account, or on the one given by --account.
+They authenticate by --api-token, or else by FURY_TOKEN, or else by
+the session that "fury login" has saved.
 
 Environment variables:
   FURY_TOKEN     Authentication token, unless --api-token is given
@@ -34,6 +39,9 @@ Exit status:
   5   Already exists
   6   Unavailable: try again later
   130 Interrupted, or 143 when terminated`,
+		Example: `  fury push package-1.0.0.tgz
+  fury versions package --account my-org
+  FURY_TOKEN=token fury yank package@1.0.0 --yes`,
 
 		// Execute reports errors and usage, not Cobra
 		SilenceErrors: true,
@@ -66,7 +74,7 @@ Exit status:
 
 	rootFlagSet := rootCmd.PersistentFlags()
 	rootFlagSet.StringVar(&flags.AuthToken, "api-token", "", "Inline authentication token (or set FURY_TOKEN)")
-	rootFlagSet.StringVarP(&flags.Account, "account", "a", "", "Current account username (or set FURY_ACCOUNT)")
+	rootFlagSet.StringVarP(&flags.Account, "account", "a", "", "Account to act on, if not your own (or set FURY_ACCOUNT)")
 	rootFlagSet.BoolVarP(&flags.Yes, "yes", "y", false, "Answer yes to every confirmation")
 	rootFlagSet.BoolVar(&flags.NoInput, "no-input", false, "Never ask; fail where input is needed")
 	rootCmd.SetGlobalNormalizationFunc(globalFlagNormalization)
