@@ -30,9 +30,10 @@ func NewForTest() *testTerm {
 }
 
 type testTerm struct {
-	interactive bool
-	prompts     map[string]string
-	streams     []*bytes.Buffer
+	interactive    bool
+	prompts        map[string]string
+	streams        []*bytes.Buffer
+	bars, spinners int
 	*term
 }
 
@@ -71,12 +72,24 @@ func (tt *testTerm) SetPromptResponses(p map[string]string) {
 	tt.prompts = p
 }
 
-// Disable progress bar
+// StartProgress shows no bar, but counts it
 func (tt *testTerm) StartProgress(int64, string) Progress {
+	tt.bars++
 	return noProgress{}
 }
 
-// Fail to open browser progress bar
+// Spin shows no spinner, but counts it
+func (tt *testTerm) Spin(string) func() {
+	tt.spinners++
+	return func() {}
+}
+
+// ProgressShown counts the progress bars and spinners that were asked for
+func (tt testTerm) ProgressShown() (bars, spinners int) {
+	return tt.bars, tt.spinners
+}
+
+// OpenBrowser opens nothing, as a test has no browser
 func (tt *testTerm) OpenBrowser(context.Context, string) bool {
 	return false
 }

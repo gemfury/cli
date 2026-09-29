@@ -56,7 +56,7 @@ func listMembers(cmd *cobra.Command, args []string) error {
 	}
 
 	// Print results
-	term.Printf("*** Collaborators ***\n")
+	term.Infof("*** Collaborators ***\n")
 	w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "name\trole\n")
 
@@ -97,7 +97,7 @@ func NewCmdSharingAdd() *cobra.Command {
 					continue
 				}
 
-				term.Printf("Invited %q as a collaborator\n", name)
+				term.Infof("Invited %q as a collaborator\n", name)
 			}
 
 			return fails.err()
@@ -136,7 +136,7 @@ func NewCmdSharingRemove() *cobra.Command {
 					continue
 				}
 
-				term.Printf("Removed %q as a collaborator\n", name)
+				term.Infof("Removed %q as a collaborator\n", name)
 			}
 
 			return fails.err()

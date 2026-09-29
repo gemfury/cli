@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -17,7 +16,6 @@ import (
 
 // NewCmdPush generates the Cobra command for "push"
 func NewCmdPush() *cobra.Command {
-	var noProgress bool
 	var isPublic bool
 
 	pushCmd := &cobra.Command{
@@ -61,52 +59,54 @@ func NewCmdPush() *cobra.Command {
 					}
 
 					// Prepare progress bar
-					var reader io.Reader = file
-					if noProgress {
-						term.Printf("%s", prefix)
-						prefix = ""
-					} else {
-						bar := term.StartProgress(stat.Size(), prefix)
-						reader = bar.NewProxyReader(file)
-						defer bar.Finish()
-					}
+					bar := term.StartProgress(stat.Size(), prefix)
+					defer bar.Finish()
 
-					return c.PushPkg(cc, name, isPublic, reader)
+					return c.PushPkg(cc, name, isPublic, bar.NewProxyReader(file))
 				}()
 
 				if err == nil {
-					term.Printf("%s- done\n", prefix)
+					term.Infof("%s- done\n", prefix)
 					continue
 				}
 
-				fails.record(name, err) // Reported by the status line below
-				if errors.Is(err, context.Canceled) {
-					term.Printf("%s- cancelled\n", prefix)
-				} else if errors.Is(err, fs.ErrNotExist) {
-					term.Printf("%s- file not found\n", prefix)
-				} else if errors.Is(err, syscall.EISDIR) {
-					term.Printf("%s- is a directory\n", prefix)
-				} else if errors.Is(err, api.ErrUnauthorized) {
-					term.Printf("%s- unauthorized\n", prefix)
-				} else if errors.Is(err, api.ErrForbidden) {
-					term.Printf("%s- no permission\n", prefix)
-				} else if errors.Is(err, api.ErrAlreadyExists) {
-					term.Printf("%s- this version already exists\n", prefix)
-				} else if ue := (api.UserError{}); errors.As(err, &ue) {
-					term.Printf("%s- %s\n", prefix, ue.ShortError())
+				// Reported by the status line, or else on stderr
+				// when --quiet left that out, and nothing was written
+				if n, _ := term.Infof("%s- %s\n", prefix, pushStatus(err)); n > 0 {
+					fails.record(name, err)
 				} else {
-					term.Printf("%s- error %q\n", prefix, err.Error())
+					fails.add("uploading", name, err)
 				}
 			}
 
-			// Per-file status is already on stdout; Execute reports the error
 			return fails.err()
 		},
 	}
 
 	// Flags and options
-	pushCmd.Flags().BoolVar(&noProgress, "quiet", false, "Do not show progress bar")
 	pushCmd.Flags().BoolVar(&isPublic, "public", false, "Create as public package")
 
 	return pushCmd
+}
+
+// pushStatus ends the status line of a file that failed to upload
+func pushStatus(err error) string {
+	ue := api.UserError{}
+	switch {
+	case errors.Is(err, context.Canceled):
+		return "cancelled"
+	case errors.Is(err, fs.ErrNotExist):
+		return "file not found"
+	case errors.Is(err, syscall.EISDIR):
+		return "is a directory"
+	case errors.Is(err, api.ErrUnauthorized):
+		return "unauthorized"
+	case errors.Is(err, api.ErrForbidden):
+		return "no permission"
+	case errors.Is(err, api.ErrAlreadyExists):
+		return "this version already exists"
+	case errors.As(err, &ue):
+		return ue.ShortError()
+	}
+	return fmt.Sprintf("error %q", err.Error())
 }

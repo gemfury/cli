@@ -75,7 +75,7 @@ func NewCmdGitDestroy() *cobra.Command {
 				return about("Repository", args[0], err)
 			}
 
-			term.Printf("%s %s repository\n", done, args[0])
+			term.Infof("%s %s repository\n", done, args[0])
 			return nil
 		},
 	}
@@ -108,7 +108,7 @@ func NewCmdGitRename() *cobra.Command {
 				return about("Repository", args[0], err)
 			}
 
-			term.Printf("Renamed %s repository to %s\n", args[0], args[1])
+			term.Infof("Renamed %s repository to %s\n", args[0], args[1])
 			return nil
 		},
 	}
@@ -148,7 +148,7 @@ func NewCmdGitRebuild() *cobra.Command {
 				msg, name = msg+" at "+rev, name+"@"+rev
 			}
 
-			term.Printf("%s ...\n", msg)
+			term.Infof("%s ...\n", msg)
 			err = c.GitRebuild(cc, term.IOOut(), repo, rev)
 			return about("Repository", name, err)
 		},
@@ -198,7 +198,7 @@ func listRepos(cmd *cobra.Command, args []string) error {
 	}
 
 	// Print results
-	term.Printf("\n*** GEMFURY GIT REPOS ***\n\n")
+	term.Infof("\n*** GEMFURY GIT REPOS ***\n\n")
 	for _, r := range repos {
 		term.Printf("%s\n", r.Name)
 	}

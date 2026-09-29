@@ -16,6 +16,9 @@ import (
 
 // ==== YANK ====
 
+// What "yank" asks before it removes anything
+const yankConfirm = "Are you sure you want to delete these files? [y/N]"
+
 func TestYankCommandOnePackage(t *testing.T) {
 	auth := terminal.TestAuther("user", "abc123", nil)
 	term := terminal.NewForTest()
@@ -137,7 +140,7 @@ func TestYankCommandMultiPackage(t *testing.T) {
 
 	// Success all around with confirmation prompt
 	term.SetPromptResponses(map[string]string{
-		"Are you sure you want to delete these files? [y/N]": "Y",
+		yankConfirm: "Y",
 	})
 
 	if err := runCommand(cc, []string{"yank", "foo@0.0.1"}); err != nil {
@@ -165,7 +168,7 @@ func TestYankCommandUnconfirmed(t *testing.T) {
 			})
 
 			term.SetPromptResponses(map[string]string{
-				"Are you sure you want to delete these files? [y/N]": answer,
+				yankConfirm: answer,
 			})
 
 			cc := testContext(t, term, auth, server)

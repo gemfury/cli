@@ -14,8 +14,19 @@ type Terminal interface {
 	StartProgress(int64, string) Progress
 	RunPrompt(*promptui.Prompt) (string, error)
 	Confirm(label string) (bool, error)
+
+	// Printf prints the result of a command, or what the user is asked
 	Printf(string, ...any) (int, error)
-	Println(a ...any) (n int, err error)
+
+	// Infof prints what is not the result of a command: a banner, the status
+	// of a change, or that nothing was found. With --quiet it writes nothing,
+	// and returns 0, which tells a caller that it was left out.
+	Infof(string, ...any) (int, error)
+
+	// EPrintf prints a warning, or the failure of an item, to the error stream
+	EPrintf(string, ...any) (int, error)
+
+	Spin(suffix string) func()
 	OpenBrowser(context.Context, string) bool
 	IsInteractive() bool
 	IOIn() io.ReadCloser
@@ -41,8 +52,12 @@ func (t term) Printf(f string, a ...any) (int, error) {
 	return fmt.Fprintf(t.ioOut, f, a...)
 }
 
-func (t term) Println(a ...any) (int, error) {
-	return fmt.Fprintln(t.ioOut, a...)
+func (t term) Infof(f string, a ...any) (int, error) {
+	return fmt.Fprintf(t.ioOut, f, a...)
+}
+
+func (t term) EPrintf(f string, a ...any) (int, error) {
+	return fmt.Fprintf(t.ioErr, f, a...)
 }
 
 func (t term) IOErr() io.Writer {

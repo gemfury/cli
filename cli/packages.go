@@ -61,7 +61,7 @@ func listPackages(cmd *cobra.Command, args []string) error {
 	}
 
 	// Print results
-	term.Printf("\n*** GEMFURY PACKAGES ***\n\n")
+	term.Infof("\n*** GEMFURY PACKAGES ***\n\n")
 	w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "name\tkind\tversion\tprivacy\n")
 
@@ -99,7 +99,7 @@ func listVersions(cmd *cobra.Command, args []string) error {
 	}
 
 	// Print results
-	term.Printf("\n*** %s versions ***\n\n", args[0])
+	term.Infof("\n*** %s versions ***\n\n", args[0])
 	termPrintVersions(term, versions)
 	return err
 }
@@ -155,7 +155,7 @@ func iterateAll(cc context.Context, showSpinner bool, fn func(req *api.Paginatio
 		}
 
 		if stopSpinner == nil && showSpinner {
-			stopSpinner = terminal.SpinIfTerminal(term, " Fetching ...")
+			stopSpinner = term.Spin(" Fetching ...")
 		}
 	}
 

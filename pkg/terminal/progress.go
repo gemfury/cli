@@ -1,10 +1,13 @@
 package terminal
 
 import (
+	"github.com/briandowns/spinner"
 	"github.com/cheggaaa/pb/v3"
 	xterm "golang.org/x/term"
 
 	"io"
+	"strings"
+	"time"
 )
 
 const (
@@ -24,6 +27,19 @@ func (t term) StartProgress(size int64, prefix string) Progress {
 	pBar = pBar.Set("prefix", prefix)
 	pBar = pBar.Set(pb.CleanOnFinish, true)
 	return &bar{pBar.Start()}
+}
+
+// Spin shows a spinner on the error stream until the returned func
+// is called. Like StartProgress, it does nothing on a non-terminal.
+func (t term) Spin(suffix string) func() {
+	if !isTerminal(t.ioErr) {
+		return func() {}
+	}
+	spin := spinner.New(spinner.CharSets[11], 100*time.Millisecond, spinner.WithWriter(t.ioErr))
+	spin.FinalMSG = "\r" + strings.Repeat(" ", 20) + "\r" // Erases previous string
+	spin.Suffix = suffix
+	spin.Start()
+	return spin.Stop
 }
 
 // isTerminal reports whether a stream (reader or writer) is backed by an

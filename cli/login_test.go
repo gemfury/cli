@@ -408,6 +408,23 @@ func TestLogoutCommandInterrupted(t *testing.T) {
 	expectCredentials(t, auth, "user", "abc123")
 }
 
+// Without saved credentials, there is nothing to ask or to revoke
+func TestLogoutCommandLoggedOut(t *testing.T) {
+	for command, stdout := range map[string]string{"logout": "You are logged out\n", "logout --quiet": ""} {
+		t.Run(command, func(t *testing.T) {
+			auth := terminal.TestAuther("", "", nil)
+			term := terminal.NewForTest()
+
+			cc := testContext(t, term, auth, offlineServer(t))
+			if err := runCommand(cc, strings.Fields(command)); err != nil {
+				t.Fatal(err)
+			}
+
+			expectOutput(t, term, stdout, "")
+		})
+	}
+}
+
 // Logout with --api-token is a usage error: nothing is revoked or wiped
 func TestLogoutCommandWithTokenFlag(t *testing.T) {
 	auth := terminal.TestAuther("user", "abc123", nil)

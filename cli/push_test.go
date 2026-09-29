@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,7 +138,7 @@ func TestPushCommandRefused(t *testing.T) {
 			server := testutil.APIServer(t, "POST", "/uploads", tc.body, tc.status)
 
 			cc := testContext(t, term, auth, server)
-			err := runCommand(cc, []string{"push", "--quiet", samplePackagePath()})
+			err := runCommand(cc, []string{"push", samplePackagePath()})
 			expectExitStatus(t, term, err, tc.exp)
 			expectOutput(t, term,
 				"Uploading sample.txt - "+tc.short+"\n",
@@ -146,24 +147,31 @@ func TestPushCommandRefused(t *testing.T) {
 	}
 }
 
+// How a failure of failingUploadServer is reported
+const uploadFailureMessage = "Something went wrong. Please contact support. (HTTP 502, request ID req-1)\n"
+
+// failingUploadServer fails every upload, with an ID to report it by
+func failingUploadServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/uploads", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Request-Id", "req-1")
+			respondWith(502, "")(w, r)
+		})
+	})
+}
+
 // A failure of the server has what to report it by in the status line
 // of its file, as stderr has only the summary of several
 func TestPushCommandServerFailure(t *testing.T) {
 	auth := terminal.TestAuther("user", "abc123", nil)
 	term := terminal.NewForTest()
 
-	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
-		mux.HandleFunc("/uploads", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("X-Request-Id", "req-1")
-			w.WriteHeader(502)
-		})
-	})
-
-	cc := testContext(t, term, auth, server)
-	err := runCommand(cc, []string{"push", "--quiet", samplePackagePath(), samplePackagePath()})
+	cc := testContext(t, term, auth, failingUploadServer(t))
+	err := runCommand(cc, []string{"push", samplePackagePath(), samplePackagePath()})
 	expectSummaryError(t, err, api.ErrFuryServer, "2 of 2 uploads failed")
 
-	const status = "Uploading sample.txt - Something went wrong. Please contact support. (HTTP 502, request ID req-1)\n"
+	const status = "Uploading sample.txt - " + uploadFailureMessage
 	expectOutput(t, term, status+status, "Error: 2 of 2 uploads failed\n")
 }
 
@@ -177,8 +185,8 @@ func TestPushCommandPartialFailure(t *testing.T) {
 
 	cc := testContext(t, term, auth, server)
 
-	// One good file whose name contains a "%" (it must not be treated as a
-	// format verb by the --quiet status line), and one missing file
+	// One good file whose name contains a "%", which the status line
+	// must not take for a format verb, and one missing file
 	good := filepath.Join(t.TempDir(), "100%d.gem")
 	if data, err := os.ReadFile(samplePackagePath()); err != nil {
 		t.Fatal(err)
@@ -187,7 +195,7 @@ func TestPushCommandPartialFailure(t *testing.T) {
 	}
 	missing := filepath.Join(t.TempDir(), "missing.gem")
 
-	err := runCommand(cc, []string{"push", "--quiet", good, missing})
+	err := runCommand(cc, []string{"push", good, missing})
 	expectSummaryError(t, err, os.ErrNotExist, "1 of 2 uploads failed")
 
 	expectOutput(t, term,
@@ -195,27 +203,38 @@ func TestPushCommandPartialFailure(t *testing.T) {
 		"Error: 1 of 2 uploads failed\n")
 }
 
+// An error that is not of the API, as of a server that is down, is
+// quoted in the status line. This one is worth trying again later.
+func TestPushCommandUnreachable(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	server := offlineServer(t)
+	server.Close()
+
+	cc := testContext(t, term, auth, server)
+	err := runCommand(cc, []string{"push", samplePackagePath()})
+	expectExitStatus(t, term, err, cli.ExitUnavailable)
+
+	status := fmt.Sprintf("Uploading sample.txt - error %q\n", err)
+	expectOutput(t, term, status, fmt.Sprintf("Error: %s\n", err))
+}
+
 // A directory is refused before anything is uploaded
 func TestPushCommandDirectory(t *testing.T) {
-	for _, args := range [][]string{{"push"}, {"push", "--quiet"}} {
-		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			auth := terminal.TestAuther("user", "abc123", nil)
-			term := terminal.NewForTest()
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+	dir := t.TempDir()
 
-			server := offlineServer(t)
-			dir := t.TempDir()
-
-			cc := testContext(t, term, auth, server)
-			err := runCommand(cc, append(args, dir))
-			if !errors.Is(err, syscall.EISDIR) {
-				t.Errorf("Expected syscall.EISDIR, got: %v", err)
-			}
-
-			expectOutput(t, term,
-				fmt.Sprintf("Uploading %s - is a directory\n", filepath.Base(dir)),
-				fmt.Sprintf("Error: read %s: is a directory\n", dir))
-		})
+	cc := testContext(t, term, auth, offlineServer(t))
+	err := runCommand(cc, []string{"push", dir})
+	if !errors.Is(err, syscall.EISDIR) {
+		t.Errorf("Expected syscall.EISDIR, got: %v", err)
 	}
+
+	expectOutput(t, term,
+		fmt.Sprintf("Uploading %s - is a directory\n", filepath.Base(dir)),
+		fmt.Sprintf("Error: read %s: is a directory\n", dir))
 }
 
 // Tests run in the directory of their package

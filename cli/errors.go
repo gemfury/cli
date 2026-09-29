@@ -123,7 +123,7 @@ func noResults(term terminal.Terminal, count int, err error, msg string) bool {
 		return false
 	}
 	if err == nil {
-		term.Println(msg)
+		term.Infof("%s\n", msg)
 	}
 	return true
 }
@@ -175,7 +175,7 @@ func (f *failures) add(verb, item string, err error) {
 	}
 	f.record(item, err)
 	if f.total > 1 && !f.interrupted() {
-		fmt.Fprintf(ctx.Terminal(f.cc).IOErr(), "Problem %s %q: %s\n", verb, item, err)
+		ctx.Terminal(f.cc).EPrintf("Problem %s %q: %s\n", verb, item, err)
 	}
 }
 

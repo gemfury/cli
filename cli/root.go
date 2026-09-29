@@ -30,6 +30,9 @@ Environment variables:
 Without a terminal, or with --no-input, nothing is asked: pass --yes
 to confirm, and set FURY_TOKEN to authenticate.
 
+With --quiet, only results, warnings, and errors are shown: the exit
+status tells whether a change was made.
+
 Exit status:
   0   Success
   1   Any other error
@@ -66,6 +69,7 @@ Exit status:
 		// Flags are parsed by now: questions are answered as they ask
 		cc := cmd.Context()
 		term := terminal.Unattended(ctx.Terminal(cc), flags.Yes, flags.NoInput)
+		term = terminal.Quiet(term, flags.Quiet, flags.NoProgress)
 		cmd.SetContext(ctx.WithTerminal(cc, term))
 
 		// Ensure authentication for all commands (see skipsAuth for exceptions)
@@ -77,6 +81,8 @@ Exit status:
 	rootFlagSet.StringVarP(&flags.Account, "account", "a", "", "Account to act on, if not your own (or set FURY_ACCOUNT)")
 	rootFlagSet.BoolVarP(&flags.Yes, "yes", "y", false, "Answer yes to every confirmation")
 	rootFlagSet.BoolVar(&flags.NoInput, "no-input", false, "Never ask; fail where input is needed")
+	rootFlagSet.BoolVarP(&flags.Quiet, "quiet", "q", false, "Show only results, warnings, and errors")
+	rootFlagSet.BoolVar(&flags.NoProgress, "no-progress", false, "Do not show progress bars and spinners")
 	rootCmd.SetGlobalNormalizationFunc(globalFlagNormalization)
 
 	// Connect child commands

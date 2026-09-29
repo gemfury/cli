@@ -221,7 +221,7 @@ func downloadVersion(cc context.Context, client *api.Client, v *api.Version, des
 		return err
 	}
 
-	term.Println(status("💾"))
+	term.Infof("%s\n", status("💾"))
 	return nil
 }
 
@@ -237,7 +237,7 @@ func backupCheckPath(term terminal.Terminal, v *api.Version, path string, status
 	}
 
 	if v == nil || v.Digests.SHA512 == "" {
-		term.Printf("%s (WARNING: No checksum provided by API)\n", status("❓"))
+		term.EPrintf("%s (WARNING: No checksum provided by API)\n", status("❓"))
 		return backupSkip // API should always have digests (theoretically)
 	}
 
@@ -254,7 +254,7 @@ func backupCheckPath(term terminal.Terminal, v *api.Version, path string, status
 
 	sum := hex.EncodeToString(hash.Sum(nil))
 	if exp := v.Digests.SHA512; exp != sum {
-		term.Printf("%s (CHECKSUM MISMATCH)\n", status("❌"))
+		term.EPrintf("%s (CHECKSUM MISMATCH)\n", status("❌"))
 		confirm := "Do you want to delete and redownload? [y/N]"
 		if ok, err := term.Confirm(confirm); err != nil {
 			return err
@@ -267,6 +267,6 @@ func backupCheckPath(term terminal.Terminal, v *api.Version, path string, status
 		return errors.New("Checksum failed")
 	}
 
-	term.Println(status("✅"))
+	term.Infof("%s\n", status("✅"))
 	return backupSkip
 }

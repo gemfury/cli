@@ -24,6 +24,8 @@ type CmdGlobalFlags struct {
 	Account      string
 	Yes          bool
 	NoInput      bool
+	Quiet        bool
+	NoProgress   bool
 }
 
 func CmdContextWith(ctx context.Context, t terminal.Terminal, as terminal.Auther) context.Context {

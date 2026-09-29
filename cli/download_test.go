@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,6 +25,9 @@ const downloadContent = "package-bytes-0123456789"
 
 // Of a file that is there already, and fails its checksum
 const staleContent = "stale-bytes"
+
+// How the stale file of foo@1.2.3 is warned about, on stderr
+const staleWarning = "ver_foo         ❌ foo-1.2.3.tgz (CHECKSUM MISMATCH)\n"
 
 // Version JSON whose download_url points back at the test server.
 // The host is only known per-request, so it is rendered by the handler.
@@ -55,17 +59,22 @@ func downloadHandler(t *testing.T) func(http.ResponseWriter, *http.Request) {
 	}
 }
 
+// downloadServer has version 1.2.3 of any package, and its file
+func downloadServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/packages/{pkg}/versions/1.2.3", downloadVersionHandler)
+		mux.HandleFunc("/downloads/", downloadHandler(t))
+	})
+}
+
 // ==== beta download ====
 
 func TestDownloadCommandSuccess(t *testing.T) {
 	auth := terminal.TestAuther("user", "abc123", nil)
 	term := terminal.NewForTest()
 
-	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
-		mux.HandleFunc("/packages/{pkg}/versions/1.2.3", downloadVersionHandler)
-		mux.HandleFunc("/downloads/", downloadHandler(t))
-	})
-
+	server := downloadServer(t)
 	cc := testContext(t, term, auth, server)
 
 	// A trailing slash on a configured endpoint must be tolerated
@@ -264,11 +273,6 @@ func TestDownloadCommandChecksumMismatch(t *testing.T) {
 			auth := terminal.TestAuther("user", "abc123", nil)
 			term := terminal.NewForTest()
 
-			server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
-				mux.HandleFunc("/packages/{pkg}/versions/1.2.3", downloadVersionHandler)
-				mux.HandleFunc("/downloads/", downloadHandler(t))
-			})
-
 			// The answer is given by the flag, or else by the user
 			args := []string{"beta", "download", "foo@1.2.3", "bar@1.2.3"}
 			if strings.HasPrefix(answer, "--") {
@@ -284,13 +288,13 @@ func TestDownloadCommandChecksumMismatch(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			cc := testContext(t, term, auth, server)
+			cc := testContext(t, term, auth, downloadServer(t))
 			err := runCommand(cc, args)
 			if (err != nil) != (tc.stderr != "") {
 				t.Errorf("Unexpected command error: %v", err)
 			}
 
-			expectErrOutput(t, term, tc.stderr)
+			expectErrOutput(t, term, staleWarning+tc.stderr)
 
 			for name, exp := range map[string]string{"foo-1.2.3.tgz": tc.foo, "bar-1.2.3.tgz": tc.bar} {
 				if body, _ := os.ReadFile(name); string(body) != exp {
@@ -298,6 +302,35 @@ func TestDownloadCommandChecksumMismatch(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A file that is there already is kept, with a warning that
+// --quiet does not hide, when the API has no checksum to verify it by
+func TestDownloadCommandNoChecksum(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/packages/foo/versions/1.2.3", respondWith(200, `{
+			"id": "ver_foo", "version": "1.2.3", "filename": "foo-1.2.3.tgz",
+			"package": { "id": "pkg_1", "name": "foo", "kind_key": "js" }
+		}`))
+	})
+
+	t.Chdir(t.TempDir())
+	if err := os.WriteFile("foo-1.2.3.tgz", []byte(staleContent), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cc := testContext(t, term, auth, server)
+	if err := runCommand(cc, []string{"beta", "download", "foo@1.2.3", "--quiet"}); err != nil {
+		t.Fatal(err)
+	}
+
+	expectOutput(t, term, "", "ver_foo         ❓ foo-1.2.3.tgz (WARNING: No checksum provided by API)\n")
+	if body, _ := os.ReadFile("foo-1.2.3.tgz"); string(body) != staleContent {
+		t.Errorf("Expected the file to be kept, got %q", body)
 	}
 }
 

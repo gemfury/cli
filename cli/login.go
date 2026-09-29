@@ -6,7 +6,6 @@ import (
 
 	"context"
 	"errors"
-	"fmt"
 )
 
 // NewCmdLogout invalidates session and wipes credentials
@@ -34,7 +33,7 @@ func NewCmdLogout() *cobra.Command {
 			if err != nil {
 				return err
 			} else if token == "" {
-				term.Println("You are logged out")
+				term.Infof("You are logged out\n")
 				return nil
 			}
 
@@ -47,7 +46,7 @@ func NewCmdLogout() *cobra.Command {
 				return err
 			}
 
-			term.Println("You have been logged out")
+			term.Infof("You have been logged out\n")
 			return nil
 		},
 	}
@@ -67,7 +66,7 @@ func logoutCurrent(cc context.Context, token string, onFailConfirm string) error
 		return err // Interrupted, rather than refused
 	} else if err != nil {
 		term := ctx.Terminal(cc)
-		fmt.Fprintf(term.IOErr(), "Error deactivating your old CLI credentials: %s\n", err)
+		term.EPrintf("Error deactivating your old CLI credentials: %s\n", err)
 		if ok, promptErr := term.Confirm(onFailConfirm); promptErr != nil {
 			return promptErr
 		} else if !ok {
@@ -136,9 +135,9 @@ nothing is saved.`,
 			}
 
 			if inlineToken != "" {
-				term.Printf("API token belongs to %q\n", user.Name)
+				term.Infof("API token belongs to %q\n", user.Name)
 			} else {
-				term.Printf("You are logged in as %q\n", user.Email)
+				term.Infof("You are logged in as %q\n", user.Email)
 			}
 
 			return nil

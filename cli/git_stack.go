@@ -43,7 +43,7 @@ func gitStackForRepo(cmd *cobra.Command, repoName string) error {
 		return err
 	}
 
-	term.Printf("*** [%s] GIT BUILD STACKS ***\n", repo.Name)
+	term.Infof("*** [%s] GIT BUILD STACKS ***\n", repo.Name)
 
 	for _, s := range stacks {
 		if s.Name == repo.Stack.Name {
@@ -86,6 +86,6 @@ func gitStackUpdate(cmd *cobra.Command, repo string, newStack string) error {
 		return about("Repository", repo, err)
 	}
 
-	term.Printf("Updated %s repository build stack\n", repo)
+	term.Infof("Updated %s repository build stack\n", repo)
 	return nil
 }

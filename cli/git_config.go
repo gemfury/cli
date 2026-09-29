@@ -73,7 +73,7 @@ func filteredGitConfig(cmd *cobra.Command, args []string) error {
 		return cmp.Compare(a.Key, b.Key)
 	})
 
-	term.Printf("\n*** GIT CONFIG ***\n\n")
+	term.Infof("\n*** GIT CONFIG ***\n\n")
 	w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
 
 	for _, c := range filteredConfig {
@@ -150,6 +150,6 @@ func gitConfigUpdate(cmd *cobra.Command, repo string, vars map[string]*string) e
 		return about("Repository", repo, err)
 	}
 
-	term.Printf("Updated %s repository config\n", repo)
+	term.Infof("Updated %s repository config\n", repo)
 	return nil
 }

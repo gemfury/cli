@@ -69,7 +69,7 @@ KIND:PACKAGE@VERSION. The kinds are:
 			if err := lookups.err(); err != nil {
 				return err
 			} else if len(versions) == 0 {
-				term.Printf("No matching versions found\n")
+				term.Infof("No matching versions found\n")
 				return nil
 			}
 
@@ -91,7 +91,7 @@ KIND:PACKAGE@VERSION. The kinds are:
 					removals.add("removing", v.Filename, err)
 					continue
 				}
-				term.Printf("Removed %q\n", v.Filename)
+				term.Infof("Removed %q\n", v.Filename)
 			}
 
 			return removals.err()

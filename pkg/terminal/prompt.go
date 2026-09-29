@@ -1,7 +1,6 @@
 package terminal
 
 import (
-	"github.com/briandowns/spinner"
 	"github.com/manifoldco/promptui"
 	xterm "golang.org/x/term"
 
@@ -9,8 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
-	"time"
 )
 
 // Confirm asks a "y/N" question from Stdin
@@ -111,18 +108,4 @@ func readRaw(stdin io.Reader, b []byte) (int, error) {
 	}
 
 	return stdin.Read(b)
-}
-
-// SpinIfTerminal shows a spinner on the error stream until the returned
-// func is called. Like StartProgress, it does nothing on a non-terminal.
-func SpinIfTerminal(t Terminal, suffix string) func() {
-	ioErr := t.IOErr()
-	if !isTerminal(ioErr) {
-		return func() {}
-	}
-	spin := spinner.New(spinner.CharSets[11], 100*time.Millisecond, spinner.WithWriter(ioErr))
-	spin.FinalMSG = "\r" + strings.Repeat(" ", 20) + "\r" // Erases previous string
-	spin.Suffix = suffix
-	spin.Start()
-	return spin.Stop
 }

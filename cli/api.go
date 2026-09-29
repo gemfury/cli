@@ -209,7 +209,7 @@ func browserLogin(cmd *cobra.Command) (*api.LoginResponse, error) {
 	}
 
 	// Start/end spinner while waiting for browser auth
-	onDone := terminal.SpinIfTerminal(term, " Waiting ...")
+	onDone := term.Spin(" Waiting ...")
 	defer onDone()
 
 	// LoginGet API will block & timeout, so we poll until a time limit,
@@ -259,7 +259,7 @@ func interactiveLogin(cmd *cobra.Command) (*api.LoginResponse, error) {
 
 	// Interactive login
 	term := ctx.Terminal(cc)
-	term.Println("Please enter your Gemfury credentials.")
+	term.Printf("Please enter your Gemfury credentials.\n")
 
 	ePrompt := promptui.Prompt{Label: "Email: "}
 	eResult, err := term.RunPrompt(&ePrompt)
