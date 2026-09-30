@@ -70,6 +70,12 @@ func NewCmdPush() *cobra.Command {
 					continue
 				}
 
+				// The URL of an upload has the account and not the file,
+				// so a 404 is not about the file
+				if errors.Is(err, api.ErrNotFound) {
+					err = fmt.Errorf("Server response: %w", err)
+				}
+
 				// Reported by the status line, or else on stderr
 				// when --quiet left that out, and nothing was written
 				if n, _ := term.Infof("%s- %s\n", prefix, pushStatus(err)); n > 0 {

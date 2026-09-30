@@ -113,6 +113,41 @@ func TestPushCommandForbidden(t *testing.T) {
 	expectOutput(t, term, "Uploading sample.txt - no permission\n", "Error: File \"sample.txt\": You're not allowed to do this\n")
 }
 
+// A 404 of an upload is reported as what the server responded, and not as
+// if the file were missing. The status line is as for any other error.
+func TestPushCommandNotFound(t *testing.T) {
+	const notFound = "Doesn't look like this exists\n"
+	const status = "Uploading sample.txt - " + notFound
+	const failure = "Error: File \"sample.txt\": Server response: " + notFound
+	const problem = "Problem uploading \"sample.txt\": Server response: " + notFound
+	const several = "Error: 2 of 2 uploads failed\n"
+	file := samplePackagePath()
+
+	for name, tc := range map[string]struct {
+		args   []string
+		body   string
+		stdout string
+		stderr string
+	}{
+		"one file":         {[]string{file}, "", status, failure},
+		"one file, quiet":  {[]string{file, "--quiet"}, "", "", failure},
+		"two files":        {[]string{file, file}, "", status + status, several},
+		"two files, quiet": {[]string{file, file, "--quiet"}, "", "", problem + problem + several},
+		"server's message": {[]string{file}, `{"error": "No such account"}`, "Uploading sample.txt - No such account\n", "Error: File \"sample.txt\": Server response: No such account\n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			auth := terminal.TestAuther("user", "abc123", nil)
+			term := terminal.NewForTest()
+
+			server := testutil.APIServer(t, "POST", "/uploads", tc.body, 404)
+			cc := testContext(t, term, auth, server)
+			err := runCommand(cc, append([]string{"push"}, tc.args...))
+			expectExitStatus(t, term, err, cli.ExitNotFound)
+			expectOutput(t, term, tc.stdout, tc.stderr)
+		})
+	}
+}
+
 // What the API responds with, and a 409, to a version that is pushed
 // again: a list, with an error for each file of the upload
 const duplicateResponse = `[{"error":{"type":"DupeVersion","message":"Version already exists"},"errors":{"base":"Version already exists"}}]`
