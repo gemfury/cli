@@ -36,7 +36,8 @@ func packagesRequest(t *testing.T, auth terminal.Auther, flags []string) (token,
 	return token, account
 }
 
-// The token is resolved from --api-token, then FURY_TOKEN, then .netrc
+// The token is resolved from --api-token, then FURY_TOKEN, then the session
+// that "login" has saved
 func TestAuthTokenPrecedence(t *testing.T) {
 	saved := terminal.TestAuther("user", "saved-token", nil)
 	unused := unusedAuther()

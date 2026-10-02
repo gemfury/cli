@@ -268,6 +268,7 @@ func TestUsageErrorOutput(t *testing.T) {
 		{[]string{"git", "config", "get", "repo"}, "Please specify a repository and at least one key"},
 		{[]string{"git", "config", "set", "repo", "A=1", "B"}, "Argument has no value: B"},
 		{[]string{"git", "stack", "set", "repo"}, "Please specify a repository and a stack"},
+		{[]string{"git", "credentials"}, "Please specify exactly one operation"},
 		{[]string{"sharing", "add"}, "Please specify at least one collaborator"},
 		{[]string{"git", "nosuch"}, `unknown command "nosuch" for "fury git"`},
 		{[]string{"beta", "nosuch"}, `unknown command "nosuch" for "fury beta"`},

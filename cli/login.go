@@ -41,7 +41,7 @@ func NewCmdLogout() *cobra.Command {
 				return err
 			}
 
-			wipeAnyway := "Do you want to remove credentials from .netrc anyway? [y/N]"
+			wipeAnyway := "Do you want to remove saved credentials anyway? [y/N]"
 			if err := logoutCurrent(cc, token, wipeAnyway); err != nil {
 				return err
 			}
@@ -88,6 +88,10 @@ func NewCmdLogin() *cobra.Command {
 commands that follow. Login is by the browser, or with --interactive
 by email and password at the terminal.
 
+The session is saved in the system keychain, and Git is set to ask this
+CLI for it when it authenticates with git.fury.io. Without a keychain,
+it is saved in the .netrc file instead.
+
 With a token, by --api-token or FURY_TOKEN, that token is verified and
 nothing is saved.`,
 		Example: `  fury login
@@ -107,7 +111,7 @@ nothing is saved.`,
 				return ErrLoginUnattended
 			}
 
-			// Logout previous CLI token, if present in .netrc. With an inline
+			// Logout previous CLI token, if one is saved. With an inline
 			// token, we only verify it, so saved credentials are left alone.
 			if inlineToken == "" {
 				if _, token, err := auth.Auth(); err == nil && token != "" {

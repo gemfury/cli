@@ -10,7 +10,8 @@ import (
 // CommandContext is the context for executing commands
 // including global flags, auther, and terminal values
 func CommandContext() context.Context {
-	term, auth := terminal.New(), terminal.Netrc()
+	term := terminal.New()
+	auth := terminal.CredentialStore(term)
 	return ctx.CmdContextWith(context.Background(), term, auth)
 }
 

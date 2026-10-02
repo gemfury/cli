@@ -43,7 +43,7 @@ func newAPIClientWithToken(cc context.Context, token string) *api.Client {
 	return c
 }
 
-// Extract authentication token from context (inline or .netrc)
+// Extract authentication token from context (inline or saved by "login")
 func contextAuthToken(cc context.Context) (string, error) {
 	if token := inlineAuthToken(cc); token != "" {
 		return token, nil
@@ -126,7 +126,7 @@ func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResp
 	cc := cmd.Context()
 	var err error
 
-	// Already authenticated with a token given inline or saved in .netrc
+	// Already authenticated with a token given inline or saved by "login"
 	if token, err := contextAuthToken(cc); token != "" || err != nil {
 		return nil, err
 	}
@@ -160,10 +160,24 @@ func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResp
 		return nil, err
 	}
 
-	// Save credentials to .netrc for future commands
-	err = ctx.Auther(cc).Append(resp.User.Email, resp.Token)
-	if err != nil {
+	// Save credentials for future commands. A token that
+	// is saved nowhere is not left valid either.
+	auth := ctx.Auther(cc)
+	if err := auth.Append(resp.User.Email, resp.Token); err != nil {
+		newAPIClientWithToken(cc, resp.Token).Logout(cc)
 		return nil, err
+	}
+
+	// Say so when the session is not in the keychain, where it is expected
+	// to be, or when Git is not set to ask this CLI for it
+	if fb, ok := auth.(terminal.FallbackAuther); ok {
+		term := ctx.Terminal(cc)
+		if path := fb.Fallback(); path != "" {
+			term.Infof("Credentials are saved in %s, as the system keychain is not available\n", path)
+		}
+		if setup := fb.GitSetup(); len(setup) > 0 {
+			term.EPrintf("Git is not set to ask this CLI for credentials, as its configuration could not be changed. To set it by hand:\n  %s\n", strings.Join(setup, "\n  "))
+		}
 	}
 
 	return &resp.User, nil

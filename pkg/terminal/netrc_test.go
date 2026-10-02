@@ -10,17 +10,42 @@ import (
 	"testing"
 )
 
-// useNetrc points NETRC at a file of a temporary directory, which has
-// the given content, or which does not exist when content is empty. The
-// directory is the home directory as well, so that no test gets to the
-// .netrc of whoever runs it.
-func useNetrc(t *testing.T, content string) string {
+// useHome makes a temporary directory the home directory, so that
+// no test gets to the files of whoever runs it
+func useHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // Home directory on Windows
+	return home
+}
 
-	path := filepath.Join(home, "netrc")
+// lockDir keeps a directory from taking another file, until the function
+// that it returns is called, or else until the test ends. The test is
+// skipped where the permissions of a directory do not keep files out.
+func lockDir(t *testing.T, dir string) (unlock func()) {
+	t.Helper()
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("Directories take a file whatever their permissions")
+	}
+
+	if err := os.Chmod(dir, 0500); err != nil {
+		t.Fatal(err)
+	}
+
+	unlock = func() { os.Chmod(dir, 0700) }
+	t.Cleanup(unlock)
+	return unlock
+}
+
+// useNetrc points NETRC at a file of the home directory of the test, which
+// has the given content, or which does not exist when content is empty.
+// The FURY_NETRC_WRITE of whoever runs the test is cleared.
+func useNetrc(t *testing.T, content string) string {
+	t.Helper()
+	t.Setenv(netrcWriteEnv, "")
+
+	path := filepath.Join(useHome(t), "netrc")
 	if content != "" {
 		writeNetrc(t, path, content)
 	}
@@ -48,21 +73,21 @@ func setDuring[T any](t *testing.T, v *T, to T) {
 }
 
 // saveSession saves the session of furyEntry, which is then the one read
-func saveSession(t *testing.T) {
+func saveSession(t *testing.T, auth Auther) {
 	t.Helper()
-	if err := Netrc().Append("u@example.com", "abc123"); err != nil {
+	if err := auth.Append("u@example.com", "abc123"); err != nil {
 		t.Fatal(err)
 	}
-	expectAuth(t, Netrc(), "u@example.com", "abc123")
+	expectAuth(t, auth, "u@example.com", "abc123")
 }
 
 // wipeSession wipes the session, after which none is read
-func wipeSession(t *testing.T) {
+func wipeSession(t *testing.T, auth Auther) {
 	t.Helper()
-	if err := Netrc().Wipe(); err != nil {
+	if err := auth.Wipe(); err != nil {
 		t.Fatal(err)
 	}
-	expectAuth(t, Netrc(), "", "")
+	expectAuth(t, auth, "", "")
 }
 
 // expectAuth asserts what credentials are saved, both empty for none
@@ -163,6 +188,9 @@ const (
 
 	// An entry that does not end its line, as the last one of a file may
 	openEntry = "machine example.com login o@example.com password other"
+
+	// A macro, which an empty line would end
+	macroEntry = "macdef init\ncd /pub\nls"
 )
 
 // A saved session replaces the entries that Gemfury has, however many, and
@@ -185,11 +213,11 @@ func TestNetrcUpdate(t *testing.T) {
 			path := useNetrc(t, tc.before)
 			before, _ := os.Stat(path)
 
-			saveSession(t)
+			saveSession(t, Netrc())
 			expectFile(t, path, tc.saved, 0600)
 			expectReplaced(t, path, before, true)
 
-			wipeSession(t)
+			wipeSession(t, Netrc())
 			expectFile(t, path, tc.wiped, 0600)
 			expectAlone(t, path)
 		})
@@ -216,7 +244,7 @@ func TestNetrcUpdateThroughLink(t *testing.T) {
 		return os.Rename(tmp, path)
 	})
 
-	saveSession(t)
+	saveSession(t, Netrc())
 	expectFile(t, target, savedEntries, 0600)
 	expectReplaced(t, target, before, true)
 
@@ -244,15 +272,7 @@ func TestNetrcUpdateInPlace(t *testing.T) {
 		// The directory takes no other file: for want of permission,
 		// or as its filesystem is read-only
 		"no permission": {otherEntry, func(t *testing.T, path string) {
-			if runtime.GOOS == "windows" || os.Geteuid() == 0 {
-				t.Skip("Directories take a file whatever their permissions")
-			}
-
-			dir := filepath.Dir(path)
-			if err := os.Chmod(dir, 0500); err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { os.Chmod(dir, 0700) })
+			lockDir(t, filepath.Dir(path))
 		}},
 
 		"read-only": {otherEntry, func(t *testing.T, _ string) {
@@ -271,7 +291,7 @@ func TestNetrcUpdateInPlace(t *testing.T) {
 			before, _ := os.Stat(path)
 			tc.setup(t, path)
 
-			saveSession(t)
+			saveSession(t, Netrc())
 			expectFile(t, path, tc.before+furyEntry, 0600)
 			expectReplaced(t, path, before, false)
 			expectAlone(t, path)
@@ -315,12 +335,10 @@ func TestNetrcUpdateFails(t *testing.T) {
 // is in it. The error says what to do, as by then a login has its token,
 // and a logout has revoked the one that stays in the file.
 func TestNetrcUpdateMacro(t *testing.T) {
-	const macro = "macdef init\ncd /pub\nls"
-
 	for name, content := range map[string]string{
-		"ends the file":      savedEntries + macro,
-		"before a line":      savedEntries + macro + "\n\n",
-		"before the session": otherEntry + macro + "\n\n" + furyEntry,
+		"ends the file":      savedEntries + macroEntry,
+		"before a line":      savedEntries + macroEntry + "\n\n",
+		"before the session": otherEntry + macroEntry + "\n\n" + furyEntry,
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := useNetrc(t, content)
@@ -336,7 +354,7 @@ func TestNetrcUpdateMacro(t *testing.T) {
 // Wiping removes every entry that Gemfury has, and not only the first of each
 func TestNetrcWipe(t *testing.T) {
 	path := useNetrc(t, staleEntries)
-	wipeSession(t)
+	wipeSession(t, Netrc())
 	expectFile(t, path, otherEntry, 0600)
 }
 
@@ -385,7 +403,7 @@ func TestNetrcPath(t *testing.T) {
 		name = "_netrc"
 	}
 
-	saveSession(t)
+	saveSession(t, Netrc())
 	expectFile(t, filepath.Join(home, name), furyEntry, 0600)
 }
 

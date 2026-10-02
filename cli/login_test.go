@@ -51,6 +51,129 @@ func TestLoginCommandSuccess(t *testing.T) {
 	}
 }
 
+// Commands run with an Auther that tells login how the saving of the
+// session went, or login would have nothing to say of it
+func TestCommandContextAuther(t *testing.T) {
+	if _, ok := ctx.Auther(cli.CommandContext()).(terminal.FallbackAuther); !ok {
+		t.Error("Expected a terminal.FallbackAuther as the Auther of commands")
+	}
+}
+
+// fallbackAuth saves the session as any Auther, and tells that it did so
+// in the file at path, for want of a system keychain, or that Git is to
+// be set by the commands of setup
+type fallbackAuth struct {
+	terminal.Auther
+	path  string
+	setup []string
+}
+
+func (a fallbackAuth) Fallback() string   { return a.path }
+func (a fallbackAuth) GitSetup() []string { return a.setup }
+
+// Login tells where the session is saved when that is not the system
+// keychain, other than with --quiet. It warns of Git that could not be set
+// to ask this CLI, with how to set it by hand.
+func TestLoginCommandFallback(t *testing.T) {
+	note := "Credentials are saved in /home/u/.netrc, as the system keychain is not available\n"
+	warning := "Git is not set to ask this CLI for credentials, as its configuration could not be changed. To set it by hand:\n" +
+		"  git config one\n  git config two\n"
+
+	inNetrc := fallbackAuth{path: "/home/u/.netrc"}
+	gitNotSet := fallbackAuth{setup: []string{"git config one", "git config two"}}
+
+	for name, tc := range map[string]struct {
+		auth   fallbackAuth
+		args   []string
+		notes  []string
+		stderr string
+	}{
+		"in the keychain":         {fallbackAuth{}, []string{"login"}, nil, ""},
+		"in .netrc":               {inNetrc, []string{"login"}, []string{note}, ""},
+		"in .netrc, with --quiet": {inNetrc, []string{"login", "--quiet"}, nil, ""},
+		"Git not set, --quiet":    {gitNotSet, []string{"login", "--quiet"}, nil, warning},
+	} {
+		t.Run(name, func(t *testing.T) {
+			auth := tc.auth
+			auth.Auther = terminal.TestAuther("", "", nil)
+			term := terminal.NewForTest()
+
+			server := testutil.APIServer(t, "GET", "/users/me", whoamiResponse, 200)
+			cc := testContext(t, term, auth, server)
+
+			// Add any key for the "open browser" prompt
+			term.InWrite([]byte("!"))
+
+			if err := runCommand(cc, tc.args); err != nil {
+				t.Fatal(err)
+			}
+
+			expectCredentials(t, auth, "u@example.com", "token-abc-123")
+			expectOutputLines(t, term, "the system keychain", tc.notes...)
+			expectErrOutput(t, term, tc.stderr)
+		})
+	}
+}
+
+// errUnsaved is the failure of unsavingAuth
+var errUnsaved = errors.New("read-only")
+
+// unsavingAuth reads the saved session as any Auther,
+// and fails to save one, or to wipe it
+type unsavingAuth struct {
+	terminal.Auther
+}
+
+func (unsavingAuth) Append(string, string) error { return errUnsaved }
+func (unsavingAuth) Wipe() error                 { return errUnsaved }
+
+// A token that cannot be saved is revoked, rather than left valid
+// where no one has it
+func TestLoginCommandNotSaved(t *testing.T) {
+	auth := unsavingAuth{terminal.TestAuther("", "", nil)}
+	term := terminal.NewForTest()
+
+	var revoked []string
+	server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
+		h.HandleFunc("POST /logout", func(w http.ResponseWriter, r *http.Request) {
+			revoked = append(revoked, r.Header.Get("Authorization"))
+			w.Write([]byte("{}"))
+		})
+	})
+
+	// Add any key for the "open browser" prompt
+	term.InWrite([]byte("!"))
+
+	cc := testContext(t, term, auth, server)
+	if err := runCommand(cc, []string{"login"}); !errors.Is(err, errUnsaved) {
+		t.Errorf("Expected the failure to save, got: %v", err)
+	}
+
+	if exp := []string{"token-abc-123"}; !slices.Equal(revoked, exp) {
+		t.Errorf("Expected revoked tokens %q, got %q", exp, revoked)
+	}
+}
+
+// A session that is revoked, and cannot be wiped, fails the logout,
+// as it does the login that would replace it
+func TestSessionNotWiped(t *testing.T) {
+	for _, args := range [][]string{{"logout", "--yes"}, {"login"}} {
+		t.Run(args[0], func(t *testing.T) {
+			auth := unsavingAuth{terminal.TestAuther("user", "abc123", nil)}
+			term := terminal.NewForTest()
+
+			server := testutil.APIServer(t, "POST", "/logout", "{}", 200)
+			cc := testContext(t, term, auth, server)
+
+			if err := runCommand(cc, args); !errors.Is(err, errUnsaved) {
+				t.Errorf("Expected the failure to wipe, got: %v", err)
+			}
+
+			expectOutput(t, term, "", "Error: read-only\n")
+		})
+	}
+}
+
 func TestLoginCommandInteractive(t *testing.T) {
 	auth := terminal.TestAuther("", "", nil)
 	term := terminal.NewForTest()
@@ -354,8 +477,8 @@ func TestLogoutCommandRevokeFails(t *testing.T) {
 			server := testutil.APIServer(t, "POST", "/logout", "", 500)
 
 			term.SetPromptResponses(map[string]string{
-				"Are you sure you want to logout? [y/N]":                      "Y",
-				"Do you want to remove credentials from .netrc anyway? [y/N]": tc.answer,
+				"Are you sure you want to logout? [y/N]":                "Y",
+				"Do you want to remove saved credentials anyway? [y/N]": tc.answer,
 			})
 
 			cc := testContext(t, term, auth, server)
@@ -394,8 +517,8 @@ func TestLogoutCommandInterrupted(t *testing.T) {
 
 	ctx.GlobalFlags(cc).Endpoint = server.URL
 	term.SetPromptResponses(map[string]string{
-		"Are you sure you want to logout? [y/N]":                      "Y",
-		"Do you want to remove credentials from .netrc anyway? [y/N]": "Y", // Never asked
+		"Are you sure you want to logout? [y/N]":                "Y",
+		"Do you want to remove saved credentials anyway? [y/N]": "Y", // Never asked
 	})
 
 	expectInterrupted(t, runCommand(cc, []string{"logout"}))

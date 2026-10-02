@@ -18,7 +18,7 @@ import (
 
 // Machines for Gemfury in .netrc file
 var (
-	netrcMachines = []string{"api.fury.io", "git.fury.io"}
+	netrcMachines = []string{"api.fury.io", GitHost}
 )
 
 type Auther interface {
@@ -129,10 +129,16 @@ func netrcUpdate(update func(net *netrc.Netrc)) error {
 	}
 
 	// Apply updates
+	before, _ := net.MarshalText()
 	update(net)
 
-	// The file ends with a line break, as a text file does, unless it is empty
+	// Without a change, there is nothing to write, nor a file to create
 	out, _ := net.MarshalText()
+	if bytes.Equal(before, out) {
+		return nil
+	}
+
+	// The file ends with a line break, as a text file does, unless it is empty
 	out = bytes.TrimSpace(out)
 	if len(out) > 0 {
 		out = append(out, '\n')

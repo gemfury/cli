@@ -20,6 +20,7 @@ func NewCmdGitRoot() *cobra.Command {
 	})
 
 	gitCmd.AddCommand(NewCmdGitConfig())
+	gitCmd.AddCommand(NewCmdGitCredentials())
 	gitCmd.AddCommand(NewCmdGitDestroy())
 	gitCmd.AddCommand(NewCmdGitRebuild())
 	gitCmd.AddCommand(NewCmdGitRename())
