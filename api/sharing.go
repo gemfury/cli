@@ -61,8 +61,15 @@ type MembersResponse struct {
 	Members    []*Member
 }
 
-// Member represents Member JSON
+func (r *MembersResponse) Page() ([]*Member, *PaginationResponse) {
+	return r.Members, r.Pagination
+}
+
+// Member represents Member JSON. The type is given for collaborations,
+// and empty for members.
 type Member struct {
-	Role string `json:"role"`
-	AccountResponse
+	AccountBasic
+	Type     string `json:"type"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
 }

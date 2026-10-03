@@ -14,19 +14,35 @@ import (
 	"testing"
 )
 
+// The second package has a prerelease alone, and so no release
 var packagesResponses = []string{`[{
 	"id": "pkg_a1b2c3",
 	"name": "pkg-ruby",
 	"kind_key": "ruby",
 	"private": false,
+	"version_count": 3,
+	"latest_version": {
+		"id": "ver_r1r2r3",
+		"version": "1.2.0.pre",
+		"prerelease": true
+	},
 	"release_version": {
-		"version": "1.1.1"
+		"id": "ver_q1q2q3",
+		"version": "1.1.1",
+		"prerelease": false
 	}
 }]`, `[{
 	"id": "pkg_z1y2x3",
 	"name": "pkg-js",
 	"kind_key": "js",
-	"private": true
+	"private": true,
+	"version_count": 1,
+	"latest_version": {
+		"id": "ver_j1j2j3",
+		"version": "0.1.0-beta.1",
+		"prerelease": true
+	},
+	"release_version": null
 }]`}
 
 // ==== packages ====
@@ -66,26 +82,55 @@ func TestPackagesCommandForbidden(t *testing.T) {
 
 // ==== versions ====
 
+// The second version has no "download_url", as it is not downloadable
 var versionsResponses = []string{`[{
 	"id": "ver_a1b2c3",
 	"version": "1.2.3",
-	"created_at": "2011-05-27T00:39:07+00:00",
+	"kind_key": "js",
+	"digests": {
+		"md5": "0123abcd",
+		"sha1": "4567ef01",
+		"sha256": "89ab2345",
+		"sha512": "cdef6789"
+	},
 	"filename": "foo-1.2.3.tgz",
+	"download_url": "https://api.fury.io/2/indexes/js/user/download/ver_a1b2c3/foo-1.2.3",
+	"prerelease": false,
+	"created_at": "2011-05-27T00:39:07+00:00",
 	"created_by": {
+		"id": "acct_d4e5f6",
 		"name": "user1"
 	},
 	"package": {
 		"id": "pkg_x9y8z7",
-		"kind_key": "js"
+		"name": "foo",
+		"kind_key": "js",
+		"private": true,
+		"version_count": 2
 	}
 }]`, `[{
 	"id": "ver_z1y2x3",
 	"version": "3.2.1",
-	"created_at": "2011-01-27T00:44:00+00:00",
+	"kind_key": "js",
+	"digests": {
+		"md5": "fedc3210",
+		"sha1": "ba987654",
+		"sha256": "76543210",
+		"sha512": "3210fedc"
+	},
 	"filename": "foo-3.2.1.tgz",
+	"prerelease": false,
+	"created_at": "2011-01-27T00:44:00+00:00",
+	"created_by": {
+		"id": "acct_g7h8i9",
+		"name": "user2"
+	},
 	"package": {
 		"id": "pkg_x9y8z7",
-		"kind_key": "js"
+		"name": "foo",
+		"kind_key": "js",
+		"private": true,
+		"version_count": 2
 	}
 }]`}
 
@@ -106,7 +151,24 @@ func TestVersionsCommandSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exp := "1.2.3 user1 2011-05-26 17:39 js foo-1.2.3.tgz 3.2.1 N/A 2011-01-26 16:44 js foo-3.2.1.tgz"
+	exp := "1.2.3 user1 2011-05-26 17:39 js foo-1.2.3.tgz 3.2.1 user2 2011-01-26 16:44 js foo-3.2.1.tgz"
+	if outStr := compactString(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
+		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	}
+}
+
+// A version without an uploader or a kind is listed with N/A for them
+func TestVersionsCommandUnknownFields(t *testing.T) {
+	term := terminal.NewForTest()
+	body := `[{"version": "1.0.0", "filename": "foo-1.0.0.tgz", "created_at": "2011-01-27T00:44:00+00:00"}]`
+	server := testutil.APIServer(t, "GET", "/packages/pkg-name/versions", body, 200)
+
+	cc := testContext(t, term, terminal.TestAuther("user", "abc123", nil), server)
+	if err := runCommand(cc, []string{"versions", "pkg-name"}); err != nil {
+		t.Fatal(err)
+	}
+
+	exp := "1.0.0 N/A 2011-01-26 16:44 N/A foo-1.0.0.tgz"
 	if outStr := compactString(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}

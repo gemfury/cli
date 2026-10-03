@@ -130,7 +130,7 @@ func backupEverything(cmd *cobra.Command, args []string, kindFlag string) error 
 	}
 
 	// Paginate over version listings until no more pages
-	return iterateAll(cc, false, func(pageReq *api.PaginationRequest) (*api.PaginationResponse, error) {
+	return iterateAll(cc, func(pageReq *api.PaginationRequest) (*api.PaginationResponse, error) {
 		resp, err := c.DumpVersions(cc, pageReq, kindFlag)
 		if err != nil {
 			return nil, err
@@ -138,12 +138,12 @@ func backupEverything(cmd *cobra.Command, args []string, kindFlag string) error 
 
 		// Save each version to disk
 		for _, v := range resp.Versions {
-			if kindFlag != "" && kindFlag != v.Package.Kind {
+			if kindFlag != "" && kindFlag != v.Kind {
 				continue
 			}
 
 			if err := backupVersion(cc, c, v, destDir); err != nil {
-				return nil, about("Version", v.Package.Name+"@"+v.Version, err)
+				return nil, about("Version", v.Package.Name+"@"+v.Version.Version, err)
 			}
 		}
 
@@ -151,15 +151,15 @@ func backupEverything(cmd *cobra.Command, args []string, kindFlag string) error 
 	})
 }
 
-func backupVersion(cc context.Context, client *api.Client, v *api.Version, destDir string) error {
+func backupVersion(cc context.Context, client *api.Client, v *api.VersionFile, destDir string) error {
 	slash := string(filepath.Separator)
 	pkgName := strings.ReplaceAll(v.Package.Name, slash, "_")
 	fileName := strings.ReplaceAll(v.ID+"_"+v.Filename, slash, "_")
-	subPath := slash + v.Package.Kind + slash + pkgName + slash + fileName
+	subPath := slash + v.Kind + slash + pkgName + slash + fileName
 	return downloadVersion(cc, client, v, destDir, filepath.Clean(subPath))
 }
 
-func downloadVersion(cc context.Context, client *api.Client, v *api.Version, destDir, subPath string) error {
+func downloadVersion(cc context.Context, client *api.Client, v *api.VersionFile, destDir, subPath string) error {
 	slash := string(filepath.Separator)
 	term := ctx.Terminal(cc)
 
@@ -226,7 +226,7 @@ func downloadVersion(cc context.Context, client *api.Client, v *api.Version, des
 }
 
 // Validate checksum for file
-func backupCheckPath(term terminal.Terminal, v *api.Version, path string, status func(string) string) error {
+func backupCheckPath(term terminal.Terminal, v *api.VersionFile, path string, status func(string) string) error {
 	// Check if file exists, and validate checksum if it does
 	if s, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return nil

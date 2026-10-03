@@ -3,6 +3,7 @@ package cli
 import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
+	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/spf13/cobra"
 
 	"fmt"
@@ -14,7 +15,7 @@ var collaboratorArgs = usageArgs(cobra.MinimumNArgs(1), "Please specify at least
 
 // Root for sharing/collaboration subcommands
 func NewCmdSharingRoot() *cobra.Command {
-	sharingCmd := &cobra.Command{
+	sharingCmd := jsonCommand(&cobra.Command{
 		Use:   "sharing",
 		Short: "Collaboration commands",
 		Long:  `List the collaborators of this account, or add and remove them.`,
@@ -22,7 +23,7 @@ func NewCmdSharingRoot() *cobra.Command {
   fury sharing --account my-org`,
 		Args: noArgs,
 		RunE: listMembers,
-	}
+	})
 
 	sharingCmd.AddCommand(NewCmdSharingAdd())
 	sharingCmd.AddCommand(NewCmdSharingRemove())
@@ -32,40 +33,23 @@ func NewCmdSharingRoot() *cobra.Command {
 
 func listMembers(cmd *cobra.Command, args []string) error {
 	cc := cmd.Context()
-	term := ctx.Terminal(cc)
 	c, err := newAPIClient(cc)
 	if err != nil {
 		return err
 	}
 
-	members := []*api.Member{}
+	members, err := fetchAll[*api.Member](cc, c.Members)
+	return printListing(cmd, members, err, "No members found for this account", func(term terminal.Terminal) {
+		term.Infof("*** Collaborators ***\n")
+		w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
+		fmt.Fprintf(w, "name\trole\n")
 
-	// Paginate over member listings until no more pages
-	err = iterateAllPages(cc, func(pageReq *api.PaginationRequest) (*api.PaginationResponse, error) {
-		resp, err := c.Members(cc, pageReq)
-		if err != nil {
-			return nil, err
+		for _, m := range members {
+			fmt.Fprintf(w, "%s\t%s\n", m.Name, m.Role)
 		}
 
-		members = append(members, resp.Members...)
-		return resp.Pagination, nil
+		w.Flush()
 	})
-
-	if noResults(term, len(members), err, "No members found for this account") {
-		return err
-	}
-
-	// Print results
-	term.Infof("*** Collaborators ***\n")
-	w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "name\trole\n")
-
-	for _, m := range members {
-		fmt.Fprintf(w, "%s\t%s\n", m.Name, m.Role)
-	}
-
-	w.Flush()
-	return err
 }
 
 // NewCmdSharingAdd generates the Cobra command for "sharing:add"
@@ -148,7 +132,7 @@ func NewCmdSharingRemove() *cobra.Command {
 
 // NewCmdAccounts lists the accounts that the user collaborates on
 func NewCmdAccounts() *cobra.Command {
-	accountsCmd := &cobra.Command{
+	accountsCmd := jsonCommand(&cobra.Command{
 		Use:   "accounts",
 		Short: "Listing of your collaborations",
 		Long: `List the accounts that you collaborate on, each of which
@@ -157,41 +141,24 @@ can be given to --account.`,
 		Args:    noArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cc := cmd.Context()
-			term := ctx.Terminal(cc)
 			c, err := newAPIClient(cc)
 			if err != nil {
 				return err
 			}
 
-			members := []*api.Member{}
+			members, err := fetchAll[*api.Member](cc, c.Collaborations)
+			return printListing(cmd, members, err, "No collaborations found for this account", func(term terminal.Terminal) {
+				w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
+				fmt.Fprintf(w, "name\tkind\trole\n")
 
-			// Paginate over collaboration listings until no more pages
-			err = iterateAllPages(cc, func(pageReq *api.PaginationRequest) (*api.PaginationResponse, error) {
-				resp, err := c.Collaborations(cc, pageReq)
-				if err != nil {
-					return nil, err
+				for _, m := range members {
+					fmt.Fprintf(w, "%s\t%s\t%s\n", m.Name, m.Type, m.Role)
 				}
 
-				members = append(members, resp.Members...)
-				return resp.Pagination, nil
+				w.Flush()
 			})
-
-			if noResults(term, len(members), err, "No collaborations found for this account") {
-				return err
-			}
-
-			// Print results
-			w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
-			fmt.Fprintf(w, "name\tkind\trole\n")
-
-			for _, m := range members {
-				fmt.Fprintf(w, "%s\t%s\t%s\n", m.Name, m.Type, m.Role)
-			}
-
-			w.Flush()
-			return err
 		},
-	}
+	})
 
 	return accountsCmd
 }

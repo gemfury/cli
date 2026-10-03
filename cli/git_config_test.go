@@ -10,6 +10,10 @@ import (
 )
 
 const (
+	gitRepoPath   = "/git/repos/me/repo-name"
+	gitBuildsPath = gitRepoPath + "/builds"
+	gitConfigPath = gitRepoPath + "/config-vars"
+
 	gitConfigResponse = `{ "config_vars": {
     "KEY1": "VALUE1",
     "KEY2": "VALUE2"
@@ -24,8 +28,7 @@ func TestGitConfigCommandSuccess(t *testing.T) {
 	term := terminal.NewForTest()
 
 	// Fire up test server
-	path := "/git/repos/me/repo-name/config-vars"
-	server := testutil.APIServer(t, "GET", path, gitConfigResponse, 200)
+	server := testutil.APIServer(t, "GET", gitConfigPath, gitConfigResponse, 200)
 
 	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
@@ -43,14 +46,12 @@ func TestGitConfigCommandSuccess(t *testing.T) {
 }
 
 func TestGitConfigCommandUnauthorized(t *testing.T) {
-	path := "/git/repos/me/repo-name/config-vars"
-	server := testutil.APIServer(t, "GET", path, "{}", 200)
+	server := testutil.APIServer(t, "GET", gitConfigPath, "{}", 200)
 	testCommandLoginPreCheck(t, []string{"git", "config", "repo-name"}, server)
 }
 
 func TestGitConfigCommandForbidden(t *testing.T) {
-	path := "/git/repos/me/repo-name/config-vars"
-	server := testutil.APIServer(t, "GET", path, "", 403)
+	server := testutil.APIServer(t, "GET", gitConfigPath, "", 403)
 	testCommandForbiddenResponse(t, []string{"git", "config", "repo-name"}, server, `Repository "repo-name"`)
 }
 
@@ -61,8 +62,7 @@ func TestGitConfigGetCommandSuccess(t *testing.T) {
 	term := terminal.NewForTest()
 
 	// Fire up test server
-	path := "/git/repos/me/repo-name/config-vars"
-	server := testutil.APIServer(t, "GET", path, gitConfigResponse, 200)
+	server := testutil.APIServer(t, "GET", gitConfigPath, gitConfigResponse, 200)
 
 	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
@@ -82,14 +82,12 @@ func TestGitConfigGetCommandSuccess(t *testing.T) {
 }
 
 func TestGitConfigGetCommandUnauthorized(t *testing.T) {
-	path := "/git/repos/me/repo-name/config-vars"
-	server := testutil.APIServer(t, "GET", path, "{}", 200)
+	server := testutil.APIServer(t, "GET", gitConfigPath, "{}", 200)
 	testCommandLoginPreCheck(t, []string{"git", "config", "get", "repo-name", "KEY2"}, server)
 }
 
 func TestGitConfigGetCommandForbidden(t *testing.T) {
-	path := "/git/repos/me/repo-name/config-vars"
-	server := testutil.APIServer(t, "GET", path, "", 403)
+	server := testutil.APIServer(t, "GET", gitConfigPath, "", 403)
 	testCommandForbiddenResponse(t, []string{"git", "config", "get", "repo-name", "KEY2"}, server, `Repository "repo-name"`)
 }
 
@@ -100,8 +98,7 @@ func TestGitConfigSetCommandSuccess(t *testing.T) {
 	term := terminal.NewForTest()
 
 	// Fire up test server
-	path := "/git/repos/me/repo-name/config-vars"
-	server := testutil.APIServer(t, "PATCH", path, gitConfigResponse, 200)
+	server := testutil.APIServer(t, "PATCH", gitConfigPath, gitConfigResponse, 200)
 
 	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
@@ -119,14 +116,12 @@ func TestGitConfigSetCommandSuccess(t *testing.T) {
 }
 
 func TestGitConfigSetCommandUnauthorized(t *testing.T) {
-	path := "/git/repos/me/repo-name/config-vars"
-	server := testutil.APIServer(t, "PATCH", path, "{}", 200)
+	server := testutil.APIServer(t, "PATCH", gitConfigPath, "{}", 200)
 	testCommandLoginPreCheck(t, []string{"git", "config", "set", "repo-name", "KEY2=VALUE2"}, server)
 }
 
 func TestGitConfigSetCommandForbidden(t *testing.T) {
-	path := "/git/repos/me/repo-name/config-vars"
-	server := testutil.APIServer(t, "PATCH", path, "", 403)
+	server := testutil.APIServer(t, "PATCH", gitConfigPath, "", 403)
 	testCommandForbiddenResponse(t, []string{"git", "config", "set", "repo-name", "KEY2=VALUE2"}, server, `Repository "repo-name"`)
 }
 
@@ -137,8 +132,7 @@ func TestGitConfigUnsetCommandSuccess(t *testing.T) {
 	term := terminal.NewForTest()
 
 	// Fire up test server
-	path := "/git/repos/me/repo-name/config-vars"
-	server := testutil.APIServer(t, "PATCH", path, gitConfigResponse, 200)
+	server := testutil.APIServer(t, "PATCH", gitConfigPath, gitConfigResponse, 200)
 
 	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
@@ -156,13 +150,11 @@ func TestGitConfigUnsetCommandSuccess(t *testing.T) {
 }
 
 func TestGitConfigUnsetCommandUnauthorized(t *testing.T) {
-	path := "/git/repos/me/repo-name/config-vars"
-	server := testutil.APIServer(t, "PATCH", path, "{}", 200)
+	server := testutil.APIServer(t, "PATCH", gitConfigPath, "{}", 200)
 	testCommandLoginPreCheck(t, []string{"git", "config", "unset", "repo-name", "KEY2"}, server)
 }
 
 func TestGitConfigUnsetCommandForbidden(t *testing.T) {
-	path := "/git/repos/me/repo-name/config-vars"
-	server := testutil.APIServer(t, "PATCH", path, "", 403)
+	server := testutil.APIServer(t, "PATCH", gitConfigPath, "", 403)
 	testCommandForbiddenResponse(t, []string{"git", "config", "unset", "repo-name", "KEY2"}, server, `Repository "repo-name"`)
 }

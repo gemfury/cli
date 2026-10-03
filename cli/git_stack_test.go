@@ -55,15 +55,14 @@ func TestGitStackCommandUnauthorized(t *testing.T) {
 }
 
 func TestGitStackCommandForbidden(t *testing.T) {
-	path := "/git/repos/me/repo-name"
-	server := testutil.APIServer(t, "GET", path, "", 403)
+	server := testutil.APIServer(t, "GET", gitRepoPath, "", 403)
 	testCommandForbiddenResponse(t, []string{"git", "stack", "repo-name"}, server, `Repository "repo-name"`)
 }
 
 func testGitStackServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	return testutil.APIServerCustom(t, func(mux *http.ServeMux) {
-		mux.HandleFunc("/git/repos/me/repo-name", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(gitRepoPath, func(w http.ResponseWriter, r *http.Request) {
 			t.Logf("API Request: %s %s", r.Method, r.URL.String())
 			w.Write([]byte(gitInfoResponse))
 		})
@@ -81,8 +80,7 @@ func TestGitStackSetCommandSuccess(t *testing.T) {
 	term := terminal.NewForTest()
 
 	// Fire up test server
-	path := "/git/repos/me/repo-name"
-	server := testutil.APIServer(t, "PATCH", path, "{}", 200)
+	server := testutil.APIServer(t, "PATCH", gitRepoPath, "{}", 200)
 
 	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
@@ -100,13 +98,11 @@ func TestGitStackSetCommandSuccess(t *testing.T) {
 }
 
 func TestGitStackSetCommandUnauthorized(t *testing.T) {
-	path := "/git/repos/me/repo-name"
-	server := testutil.APIServer(t, "PATCH", path, "{}", 200)
+	server := testutil.APIServer(t, "PATCH", gitRepoPath, "{}", 200)
 	testCommandLoginPreCheck(t, []string{"git", "stack", "set", "repo-name", "fury-22"}, server)
 }
 
 func TestGitStackSetCommandForbidden(t *testing.T) {
-	path := "/git/repos/me/repo-name"
-	server := testutil.APIServer(t, "PATCH", path, "", 403)
+	server := testutil.APIServer(t, "PATCH", gitRepoPath, "", 403)
 	testCommandForbiddenResponse(t, []string{"git", "stack", "set", "repo-name", "fury-22"}, server, `Repository "repo-name"`)
 }

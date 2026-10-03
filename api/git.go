@@ -31,13 +31,15 @@ type GitReposResponse struct {
 	}
 }
 
-// Repo represents Git Repo JSON
+func (r *GitReposResponse) Page() ([]*GitRepo, *PaginationResponse) {
+	return r.Root.Repos, r.Pagination
+}
+
+// GitRepo represents Git Repo JSON
 type GitRepo struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Stack struct {
-		Name string `json:"name"`
-	} `json:"build_stack"`
+	ID    string   `json:"id"`
+	Name  string   `json:"name"`
+	Stack GitStack `json:"build_stack"`
 }
 
 // GitInfo returns the details of a specific Git repository

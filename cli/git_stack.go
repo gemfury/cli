@@ -7,7 +7,7 @@ import (
 
 // NewCmdGitStack is the root for Git Stack
 func NewCmdGitStack() *cobra.Command {
-	gitStackCmd := &cobra.Command{
+	gitStackCmd := jsonCommand(&cobra.Command{
 		Use:   "stack REPO",
 		Short: "Configure Git stack",
 		Long: `List the stacks that a repository can be built on, marking
@@ -17,11 +17,17 @@ the current one, or set another.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return gitStackForRepo(cmd, args[0])
 		},
-	}
+	})
 
 	gitStackCmd.AddCommand(NewCmdGitStackSet())
 
 	return gitStackCmd
+}
+
+// gitStackItem is a build stack, and whether the repo is on it
+type gitStackItem struct {
+	Name    string `json:"name"`
+	Current bool   `json:"current"`
 }
 
 // gitStackForRepo lists the build stacks, marking that of the repo
@@ -43,15 +49,23 @@ func gitStackForRepo(cmd *cobra.Command, repoName string) error {
 		return err
 	}
 
+	items := make([]gitStackItem, 0, len(stacks))
+	for _, s := range stacks {
+		items = append(items, gitStackItem{Name: s.Name, Current: s.Name == repo.Stack.Name})
+	}
+
+	if printsJSON(cmd) {
+		return termPrintJSON(term, items)
+	}
+
 	term.Infof("*** [%s] GIT BUILD STACKS ***\n", repo.Name)
 
-	for _, s := range stacks {
-		if s.Name == repo.Stack.Name {
-			term.Printf("*")
-		} else {
-			term.Printf(" ")
+	for _, s := range items {
+		mark := " "
+		if s.Current {
+			mark = "*"
 		}
-		term.Printf(" %s\n", s.Name)
+		term.Printf("%s %s\n", mark, s.Name)
 	}
 
 	return nil

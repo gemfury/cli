@@ -15,9 +15,14 @@ func (c *Client) WhoAmI(cc context.Context) (*AccountResponse, error) {
 
 // AccountResponse represents Account JSON
 type AccountResponse struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
+	AccountBasic
 	Type     string `json:"type"`
 	Email    string `json:"email"`
 	Username string `json:"username"`
+}
+
+// AccountBasic represents the Account JSON fields common to every account
+type AccountBasic struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }

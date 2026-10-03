@@ -1,20 +1,19 @@
 package cli
 
 import (
-	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
 	"github.com/spf13/cobra"
 	"strings"
 	"text/tabwriter"
 
-	"cmp"
 	"fmt"
+	"maps"
 	"slices"
 )
 
 // NewCmdGitConfig is the root for Git Config
 func NewCmdGitConfig() *cobra.Command {
-	gitConfigCmd := &cobra.Command{
+	gitConfigCmd := jsonCommand(&cobra.Command{
 		Use:   "config REPO",
 		Short: "Configure Git build",
 		Long: `List the build environment of a Git repository,
@@ -22,7 +21,7 @@ or get, set, and unset its keys.`,
 		Example: `  fury git config my-repo`,
 		Args:    repoArg,
 		RunE:    filteredGitConfig,
-	}
+	})
 
 	gitConfigCmd.AddCommand(NewCmdGitConfigSet())
 	gitConfigCmd.AddCommand(NewCmdGitConfigGet())
@@ -33,14 +32,14 @@ or get, set, and unset its keys.`,
 
 // NewCmdGitConfigGet retrieves one or more configuration keys
 func NewCmdGitConfigGet() *cobra.Command {
-	gitConfigGetCmd := &cobra.Command{
+	gitConfigGetCmd := jsonCommand(&cobra.Command{
 		Use:   "get REPO KEY...",
 		Short: "Get Git build environment key",
 		Example: `  fury git config get my-repo KEY
   fury git config get my-repo KEY OTHER`,
 		Args: usageArgs(cobra.MinimumNArgs(2), "Please specify a repository and at least one key"),
 		RunE: filteredGitConfig,
-	}
+	})
 
 	return gitConfigGetCmd
 }
@@ -54,30 +53,27 @@ func filteredGitConfig(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	config, err := c.GitConfig(cc, args[0])
+	vars, err := c.GitConfig(cc, args[0])
 	if err != nil {
 		return about("Repository", args[0], err)
 	}
 
-	filteredConfig := config
 	if keys := args[1:]; len(keys) > 0 {
-		filteredConfig = make([]api.GitConfigPair, 0, len(keys))
-		for _, c := range config {
-			if slices.Contains(keys, c.Key) {
-				filteredConfig = append(filteredConfig, c)
-			}
-		}
+		maps.DeleteFunc(vars, func(k, _ string) bool {
+			return !slices.Contains(keys, k)
+		})
 	}
 
-	slices.SortFunc(filteredConfig, func(a, b api.GitConfigPair) int {
-		return cmp.Compare(a.Key, b.Key)
-	})
+	// As an object, whose keys the encoder sorts
+	if printsJSON(cmd) {
+		return termPrintJSON(term, vars)
+	}
 
 	term.Infof("\n*** GIT CONFIG ***\n\n")
 	w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
 
-	for _, c := range filteredConfig {
-		fmt.Fprintf(w, "%s:\t%s\n", c.Key, c.Value)
+	for _, k := range slices.Sorted(maps.Keys(vars)) {
+		fmt.Fprintf(w, "%s:\t%s\n", k, vars[k])
 	}
 
 	w.Flush()

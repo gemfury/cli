@@ -9,7 +9,7 @@ import (
 )
 
 // Listing all versions for an account for backup purposes, etc
-func (c *Client) DumpVersions(cc context.Context, body *PaginationRequest, kindFilter string) (*VersionsResponse, error) {
+func (c *Client) DumpVersions(cc context.Context, body *PaginationRequest, kindFilter string) (*VersionFilesResponse, error) {
 	path := "/versions/$dump"
 	if kindFilter != "" {
 		path = path + "?kind=" + url.QueryEscape(kindFilter)
@@ -23,17 +23,31 @@ func (c *Client) DumpVersions(cc context.Context, body *PaginationRequest, kindF
 		}
 	}
 
-	resp := VersionsResponse{}
+	resp := VersionFilesResponse{}
 	pagination, err := req.doPaginatedJSON(&resp.Versions)
 	resp.Pagination = pagination
+	resolveKinds(resp.Versions)
 
 	return &resp, err
+}
+
+// VersionFilesResponse represents details from the dump of Versions
+type VersionFilesResponse struct {
+	Pagination *PaginationResponse
+	Versions   []*VersionFile
+}
+
+// VersionFile represents Version JSON with its "download_url", for
+// DownloadVersion. No command prints it.
+type VersionFile struct {
+	Version
+	DownloadURL string `json:"download_url"`
 }
 
 // DownloadVersion uses the "download_url" field to download the Version file.
 // The URL must be served by this client's API endpoint, since the request is
 // authenticated with the client's token.
-func (c *Client) DownloadVersion(cc context.Context, v *Version) (io.ReadCloser, int64, error) {
+func (c *Client) DownloadVersion(cc context.Context, v *VersionFile) (io.ReadCloser, int64, error) {
 	path, ok := strings.CutPrefix(v.DownloadURL, c.Endpoint)
 	if !ok || !strings.HasPrefix(path, "/") {
 		return nil, 0, fmt.Errorf("Download URL %q is not served by %s", v.DownloadURL, c.Endpoint)

@@ -27,9 +27,8 @@ func TestGitRebuildCommandSuccess(t *testing.T) {
 	var revDst string
 
 	// Fire up test server
-	path := "/git/repos/me/repo-name/builds"
 	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
-		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(gitBuildsPath, func(w http.ResponseWriter, r *http.Request) {
 			if m := r.Method; m != "POST" {
 				t.Errorf("Incorrect method: %q", m)
 			}
@@ -86,15 +85,13 @@ func TestGitRebuildCommandSuccess(t *testing.T) {
 }
 
 func TestGitRebuildCommandUnauthorized(t *testing.T) {
-	path := "/git/repos/me/repo-name/builds"
-	server := testutil.APIServer(t, "POST", path, gitRebuildResponse, 200)
+	server := testutil.APIServer(t, "POST", gitBuildsPath, gitRebuildResponse, 200)
 	testCommandLoginPreCheck(t, []string{"git", "rebuild", "repo-name"}, server)
 }
 
 // The error is about the revision of the repository, when one is given
 func TestGitRebuildCommandForbidden(t *testing.T) {
-	path := "/git/repos/me/repo-name/builds"
-	server := testutil.APIServer(t, "POST", path, "", 403)
+	server := testutil.APIServer(t, "POST", gitBuildsPath, "", 403)
 
 	for about, args := range map[string][]string{
 		`Repository "repo-name"`:      {"repo-name"},
@@ -114,8 +111,7 @@ func TestGitRenameCommandSuccess(t *testing.T) {
 	term := terminal.NewForTest()
 
 	// Fire up test server
-	path := "/git/repos/me/repo-name"
-	server := testutil.APIServer(t, "PATCH", path, "{}", 200)
+	server := testutil.APIServer(t, "PATCH", gitRepoPath, "{}", 200)
 
 	cc := cli.TestContext(t.Context(), term, auth)
 	flags := ctx.GlobalFlags(cc)
@@ -133,15 +129,13 @@ func TestGitRenameCommandSuccess(t *testing.T) {
 }
 
 func TestGitRenameCommandUnauthorized(t *testing.T) {
-	path := "/git/repos/me/repo-name"
-	server := testutil.APIServer(t, "PATCH", path, "{}", 200)
+	server := testutil.APIServer(t, "PATCH", gitRepoPath, "{}", 200)
 	args := []string{"git", "rename", "repo-name", "new-name"}
 	testCommandLoginPreCheck(t, args, server)
 }
 
 func TestGitRenameCommandForbidden(t *testing.T) {
-	path := "/git/repos/me/repo-name"
-	server := testutil.APIServer(t, "PATCH", path, "", 403)
+	server := testutil.APIServer(t, "PATCH", gitRepoPath, "", 403)
 	args := []string{"git", "rename", "repo-name", "new-name"}
 	testCommandForbiddenResponse(t, args, server, `Repository "repo-name"`)
 }
@@ -226,14 +220,12 @@ func TestGitDestroyCommandUnconfirmed(t *testing.T) {
 }
 
 func TestGitDestroyCommandUnauthorized(t *testing.T) {
-	path := "/git/repos/me/repo-name"
-	server := testutil.APIServer(t, "DELETE", path, "{}", 200)
+	server := testutil.APIServer(t, "DELETE", gitRepoPath, "{}", 200)
 	testCommandLoginPreCheck(t, []string{"git", "destroy", "--force", "repo-name"}, server)
 }
 
 func TestGitDestroyCommandForbidden(t *testing.T) {
-	path := "/git/repos/me/repo-name"
-	server := testutil.APIServer(t, "DELETE", path, "", 403)
+	server := testutil.APIServer(t, "DELETE", gitRepoPath, "", 403)
 	testCommandForbiddenResponse(t, []string{"git", "destroy", "--force", "repo-name"}, server, `Repository "repo-name"`)
 }
 
@@ -270,10 +262,12 @@ func TestGitCommandsLocked(t *testing.T) {
 
 var gitReposResponses = []string{`{ "repos": [{
 	"id": "repo_a1b2c3",
-	"name": "repoA"
+	"name": "repoA",
+	"build_stack": { "name": "fury-14" }
 }]}`, `{ "repos" : [{
 	"id": "repo_z1y2x3",
-	"name": "repoZ"
+	"name": "repoZ",
+	"build_stack": { "name": "fury-22" }
 }]}`}
 
 func TestGitListCommandSuccess(t *testing.T) {

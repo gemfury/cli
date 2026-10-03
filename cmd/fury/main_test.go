@@ -8,9 +8,26 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"syscall"
 	"testing"
 )
+
+// A legacy colon-joined command is split into subcommands, with its
+// flags as they are, unless a flag comes first
+func TestConvertLegacyArgs(t *testing.T) {
+	for _, tc := range []struct {
+		args, want []string
+	}{
+		{[]string{"fury", "git:list", "--json"}, []string{"git", "list", "--json"}},
+		{[]string{"fury", "git:config:get", "repo", "KEY", "--json"}, []string{"git", "config", "get", "repo", "KEY", "--json"}},
+		{[]string{"fury", "--json", "git", "list"}, nil},
+	} {
+		if got := convertLegacyArgs(tc.args); !slices.Equal(got, tc.want) {
+			t.Errorf("Legacy args %q = %q, want %q", tc.args, got, tc.want)
+		}
+	}
+}
 
 func TestExitStatus(t *testing.T) {
 	cancelled := fmt.Errorf("Request failed: %w", context.Canceled)

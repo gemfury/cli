@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"net/url"
 	"time"
@@ -23,7 +24,7 @@ func (c *Client) Packages(cc context.Context, body *PaginationRequest) (*Package
 	return &resp, err
 }
 
-// Versions returns the details of the versions listing for a package
+// PackageVersions returns the details of the versions listing for a package
 func (c *Client) PackageVersions(cc context.Context, pkg string, body *PaginationRequest) (*VersionsResponse, error) {
 	req := c.newRequest(cc, "GET", "/packages/"+url.PathEscape(pkg)+"/versions?expand=package", true)
 
@@ -36,6 +37,7 @@ func (c *Client) PackageVersions(cc context.Context, pkg string, body *Paginatio
 	resp := VersionsResponse{}
 	pagination, err := req.doPaginatedJSON(&resp.Versions)
 	resp.Pagination = pagination
+	resolveKinds(resp.Versions)
 
 	return &resp, err
 }
@@ -53,17 +55,19 @@ func (c *Client) Versions(cc context.Context, filter url.Values, body *Paginatio
 	resp := VersionsResponse{}
 	pagination, err := req.doPaginatedJSON(&resp.Versions)
 	resp.Pagination = pagination
+	resolveKinds(resp.Versions)
 
 	return &resp, err
 }
 
 // Version returns the details of a specific version of a package
-func (c *Client) Version(cc context.Context, pkg, ver string) (*Version, error) {
+func (c *Client) Version(cc context.Context, pkg, ver string) (*VersionFile, error) {
 	path := "/packages/" + url.PathEscape(pkg) + "/versions/" + url.PathEscape(ver)
 	req := c.newRequest(cc, "GET", path+"?expand=package", true)
 
-	resp := Version{}
+	resp := VersionFile{}
 	err := req.doJSON(&resp)
+	resp.resolveKind()
 	return &resp, err
 }
 
@@ -73,20 +77,35 @@ type PackagesResponse struct {
 	Packages   []*Package
 }
 
+func (r *PackagesResponse) Page() ([]*Package, *PaginationResponse) {
+	return r.Packages, r.Pagination
+}
+
 // VersionsResponse represents details from Versions API call
 type VersionsResponse struct {
 	Pagination *PaginationResponse
 	Versions   []*Version
 }
 
-// Package represents Package JSON
+func (r *VersionsResponse) Page() ([]*Version, *PaginationResponse) {
+	return r.Versions, r.Pagination
+}
+
+// Package represents Package JSON. The release version is null for a
+// package with prereleases alone.
 type Package struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
-	Kind           string   `json:"kind_key"`
-	IsPrivate      bool     `json:"private"`
-	LatestVersion  Version  `json:"latest_version"`
-	ReleaseVersion *Version `json:"release_version"`
+	PackageBasic
+	LatestVersion  VersionBasic  `json:"latest_version"`
+	ReleaseVersion *VersionBasic `json:"release_version"`
+}
+
+// PackageBasic represents the Package JSON fields common to every package
+type PackageBasic struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Kind         string `json:"kind_key"`
+	IsPrivate    bool   `json:"private"`
+	VersionCount int    `json:"version_count"`
 }
 
 func (p Package) Privacy() string {
@@ -103,36 +122,49 @@ func (p Package) DisplayVersion() string {
 	return "beta"
 }
 
-// VersionResponse represents Version JSON
+// Version represents Version JSON
 type Version struct {
-	ID          string           `json:"id"`
-	Version     string           `json:"version"`
-	Package     *Package         `json:"package,omitempty"`
-	CreatedBy   *AccountResponse `json:"created_by"`
-	CreatedAt   time.Time        `json:"created_at"`
-	DownloadURL string           `json:"download_url"`
-	Filename    string           `json:"filename"`
-	Digests     VersionDigests   `json:"digests"`
+	VersionBasic
+	Kind      string         `json:"kind_key"`
+	Digests   VersionDigests `json:"digests"`
+	Filename  string         `json:"filename"`
+	CreatedAt time.Time      `json:"created_at"`
+	CreatedBy AccountBasic   `json:"created_by"`
+	Package   PackageBasic   `json:"package"`
+}
+
+// VersionBasic represents the Version JSON fields common to every version
+type VersionBasic struct {
+	ID         string `json:"id"`
+	Version    string `json:"version"`
+	Prerelease bool   `json:"prerelease"`
 }
 
 // VersionDigests represents Version's digest field
 type VersionDigests struct {
-	SHA512 string `json:"sha512"`
-	SHA256 string `json:"sha256"`
-	SHA1   string `json:"sha1"`
 	MD5    string `json:"md5"`
+	SHA1   string `json:"sha1"`
+	SHA256 string `json:"sha256"`
+	SHA512 string `json:"sha512"`
+}
+
+// resolveKind fills in the kind from the expanded package, for the
+// responses of an older API that gives it there alone
+func (v *Version) resolveKind() {
+	v.Kind = cmp.Or(v.Kind, v.Package.Kind)
+}
+
+// resolveKinds does resolveKind for a listing of versions, or version files
+func resolveKinds[V interface{ resolveKind() }](versions []V) {
+	for _, v := range versions {
+		v.resolveKind()
+	}
 }
 
 func (v Version) DisplayCreatedBy() string {
-	if a := v.CreatedBy; a != nil {
-		return a.Name
-	}
-	return "N/A"
+	return cmp.Or(v.CreatedBy.Name, "N/A")
 }
 
-func (v Version) Kind() string {
-	if p := v.Package; p != nil && p.Kind != "" {
-		return p.Kind
-	}
-	return "N/A"
+func (v Version) DisplayKind() string {
+	return cmp.Or(v.Kind, "N/A")
 }

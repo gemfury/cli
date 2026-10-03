@@ -18,6 +18,12 @@ type PaginationResponse struct {
 	linkheader.Links
 }
 
+// Paged is the response to one page of a listing: its items, and the
+// pagination for the next page, if any
+type Paged[T any] interface {
+	Page() ([]T, *PaginationResponse)
+}
+
 // parsePagination extracts header information into PaginationResponse
 func parsePagination(resp *http.Response) *PaginationResponse {
 	links := linkheader.Parse(resp.Header.Get("Link"))

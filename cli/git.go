@@ -3,6 +3,7 @@ package cli
 import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
+	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/spf13/cobra"
 
 	"fmt"
@@ -163,46 +164,28 @@ func NewCmdGitRebuild() *cobra.Command {
 
 // NewCmdGitList lists Git repositories
 func NewCmdGitList() *cobra.Command {
-	return &cobra.Command{
+	return jsonCommand(&cobra.Command{
 		Use:   "list",
 		Short: "List repos in this account",
 		Example: `  fury git list
   fury git list --account my-org`,
 		Args: noArgs,
 		RunE: listRepos,
-	}
+	})
 }
 
 func listRepos(cmd *cobra.Command, args []string) error {
 	cc := cmd.Context()
-	term := ctx.Terminal(cc)
 	c, err := newAPIClient(cc)
 	if err != nil {
 		return err
 	}
 
-	repos := []*api.GitRepo{}
-
-	// Paginate over repo listings until no more pages
-	err = iterateAllPages(cc, func(pageReq *api.PaginationRequest) (*api.PaginationResponse, error) {
-		resp, err := c.GitList(cc, pageReq)
-		if err != nil {
-			return nil, err
+	repos, err := fetchAll[*api.GitRepo](cc, c.GitList)
+	return printListing(cmd, repos, err, "No Git repositories found in this account", func(term terminal.Terminal) {
+		term.Infof("\n*** GEMFURY GIT REPOS ***\n\n")
+		for _, r := range repos {
+			term.Printf("%s\n", r.Name)
 		}
-
-		repos = append(repos, resp.Root.Repos...)
-		return resp.Pagination, nil
 	})
-
-	if noResults(term, len(repos), err, "No Git repositories found in this account") {
-		return err
-	}
-
-	// Print results
-	term.Infof("\n*** GEMFURY GIT REPOS ***\n\n")
-	for _, r := range repos {
-		term.Printf("%s\n", r.Name)
-	}
-
-	return err
 }

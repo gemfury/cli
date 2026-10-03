@@ -10,23 +10,28 @@ import (
 
 // NewCmdWhoAmI generates the Cobra command for "whoami"
 func NewCmdWhoAmI() *cobra.Command {
-	whoCmd := &cobra.Command{
+	whoCmd := jsonCommand(&cobra.Command{
 		Use:   "whoami",
 		Short: "Show current account",
 		Example: `  fury whoami
   FURY_TOKEN=token fury whoami`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			resp, err := whoAMI(cmd.Context())
+			cc := cmd.Context()
+			resp, err := whoAMI(cc)
 			if err != nil {
 				return err
 			}
 
-			term := ctx.Terminal(cmd.Context())
+			term := ctx.Terminal(cc)
+			if printsJSON(cmd) {
+				return termPrintJSON(term, resp)
+			}
+
 			term.Printf("You are logged in as %q\n", resp.Name)
 			return nil
 		},
-	}
+	})
 
 	return whoCmd
 }

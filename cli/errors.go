@@ -3,7 +3,6 @@ package cli
 import (
 	"github.com/gemfury/cli/api"
 	"github.com/gemfury/cli/internal/ctx"
-	"github.com/gemfury/cli/pkg/terminal"
 	"github.com/spf13/cobra"
 
 	"context"
@@ -113,19 +112,6 @@ func about(kind, name string, err error) error {
 	}
 
 	return &aboutError{kind: kind, name: name, err: err}
-}
-
-// noResults handles the end of a paginated listing that produced no items.
-// It prints msg only when the listing was genuinely empty, not when it failed
-// before returning anything, and reports whether the caller should stop.
-func noResults(term terminal.Terminal, count int, err error, msg string) bool {
-	if count > 0 {
-		return false
-	}
-	if err == nil {
-		term.Infof("%s\n", msg)
-	}
-	return true
 }
 
 // failures collects what went wrong in a command that processes several

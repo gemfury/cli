@@ -22,6 +22,19 @@ func exampleCommand(cc context.Context, args []string) (*cobra.Command, error) {
 	return found, found.ValidateArgs(found.Flags().Args())
 }
 
+// exampleArgs are the arguments of an example of the command called name,
+// past that name and any VAR=value before it
+func exampleArgs(line, name string) (args []string, ok bool) {
+	args = strings.Fields(line)
+	for len(args) > 0 && strings.Contains(args[0], "=") {
+		args = args[1:]
+	}
+	if len(args) == 0 || args[0] != name {
+		return nil, false
+	}
+	return args[1:], true
+}
+
 // Help never requires authentication, and never contacts the API
 func TestHelpWithoutAuth(t *testing.T) {
 	for _, command := range []string{"help", "help push", "git --help", "git", "beta"} {
@@ -58,16 +71,12 @@ func TestHelpExamples(t *testing.T) {
 					t.Errorf("Expected an indent of two spaces, got %q", line)
 				}
 
-				// Skip any leading VAR=value
-				args := strings.Fields(line)
-				for len(args) > 0 && strings.Contains(args[0], "=") {
-					args = args[1:]
-				}
-				if len(args) == 0 || args[0] != root.Name() {
+				args, ok := exampleArgs(line, root.Name())
+				if !ok {
 					t.Fatalf("Expected a command line of %q, got %q", root.Name(), line)
 				}
 
-				found, err := exampleCommand(cc, args[1:])
+				found, err := exampleCommand(cc, args)
 				if err != nil {
 					t.Fatalf("Example %q: %s", line, err)
 				} else if cmd != root && found.CommandPath() != path {

@@ -9,7 +9,11 @@ import (
 )
 
 const whoamiResponse = `{
-	"name": "joetest"
+	"id": "acct_j0e1t2",
+	"name": "joetest",
+	"type": "user",
+	"email": "joe@example.com",
+	"username": "joetest"
 }`
 
 func TestWhoamiCommandSuccess(t *testing.T) {

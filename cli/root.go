@@ -33,6 +33,11 @@ to confirm, and set FURY_TOKEN to authenticate.
 With --quiet, only results, warnings, and errors are shown: the exit
 status tells whether a change was made.
 
+With --json, on the commands whose help lists it, the result is printed
+as JSON on stdout, and nothing else is. Every field of a record is
+printed, empty when the API does not provide it. Errors are as without
+it, and nothing is asked.
+
 Exit status:
   0   Success
   1   Any other error
@@ -66,10 +71,12 @@ Exit status:
 	flags := ctx.GlobalFlags(cc)
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		// Flags are parsed by now: questions are answered as they ask
+		// Flags are parsed by now: questions are answered as they ask.
+		// With --json none is asked, as it would be on stdout with the result.
 		cc := cmd.Context()
-		term := terminal.Unattended(ctx.Terminal(cc), flags.Yes, flags.NoInput)
-		term = terminal.Quiet(term, flags.Quiet, flags.NoProgress)
+		asJSON := printsJSON(cmd)
+		term := terminal.Unattended(ctx.Terminal(cc), flags.Yes, flags.NoInput || asJSON)
+		term = terminal.Quiet(term, flags.Quiet || asJSON, flags.NoProgress)
 		cmd.SetContext(ctx.WithTerminal(cc, term))
 
 		// Ensure authentication for all commands (see skipsAuth for exceptions)

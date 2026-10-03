@@ -8,19 +8,11 @@ import (
 	"errors"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
 )
-
-// serving is a server to start for a test, which
-// responds with the pages of a listing, or with a body
-func serving(method, path string, code int, pages ...string) func(*testing.T) *httptest.Server {
-	return func(t *testing.T) *httptest.Server {
-		t.Helper()
-		return testutil.APIServerPaginated(t, method, path, pages, code)
-	}
-}
 
 // An upload has a progress bar, and a listing of several pages
 // a spinner, unless --no-progress or --quiet leaves them out
@@ -52,35 +44,32 @@ func TestNoProgress(t *testing.T) {
 
 // With --quiet, a listing is as without, but for its banner
 func TestQuietListing(t *testing.T) {
-	for name, tc := range map[string]struct {
-		args   []string
-		server func(*testing.T) *httptest.Server
-		banner string
-	}{
-		"packages":   {[]string{"packages"}, serving("GET", "/packages", 200, packagesResponses...), "\n*** GEMFURY PACKAGES ***\n\n"},
-		"versions":   {[]string{"versions", "foo"}, serving("GET", "/packages/foo/versions", 200, versionsResponses...), "\n*** foo versions ***\n\n"},
-		"sharing":    {[]string{"sharing"}, serving("GET", "/members", 200, sharingResponses...), "*** Collaborators ***\n"},
-		"accounts":   {[]string{"accounts"}, serving("GET", "/collaborations", 200, accountsResponses...), ""},
-		"git list":   {[]string{"git", "list"}, serving("GET", "/git/repos/me", 200, gitReposResponses...), "\n*** GEMFURY GIT REPOS ***\n\n"},
-		"git config": {[]string{"git", "config", "repo-name"}, serving("GET", "/git/repos/me/repo-name/config-vars", 200, gitConfigResponse), "\n*** GIT CONFIG ***\n\n"},
-		"git stack":  {[]string{"git", "stack", "repo-name"}, testGitStackServer, "*** [repo-name] GIT BUILD STACKS ***\n"},
+	for name, banner := range map[string]string{
+		"packages":   "\n*** GEMFURY PACKAGES ***\n\n",
+		"versions":   "\n*** foo versions ***\n\n",
+		"sharing":    "*** Collaborators ***\n",
+		"accounts":   "",
+		"git list":   "\n*** GEMFURY GIT REPOS ***\n\n",
+		"git config": "\n*** GIT CONFIG ***\n\n",
+		"git stack":  "*** [repo-name] GIT BUILD STACKS ***\n",
 	} {
 		t.Run(name, func(t *testing.T) {
+			tc := jsonCases[name]
 			server := tc.server(t)
-			output := func(args ...string) string {
+			output := func(flags ...string) string {
 				auth := terminal.TestAuther("user", "abc123", nil)
 				term := terminal.NewForTest()
 
 				cc := testContext(t, term, auth, server)
-				if err := runCommandNoErr(cc, append(args, tc.args...)); err != nil {
+				if err := runCommandNoErr(cc, slices.Concat(flags, strings.Fields(name), tc.args)); err != nil {
 					t.Fatal(err)
 				}
 				return string(term.OutBytes())
 			}
 
-			listing, ok := strings.CutPrefix(output(), tc.banner)
+			listing, ok := strings.CutPrefix(output(), banner)
 			if !ok || listing == "" {
-				t.Fatalf("Expected a listing after the banner %q, got %q", tc.banner, listing)
+				t.Fatalf("Expected a listing after the banner %q, got %q", banner, listing)
 			}
 
 			if out := output("--quiet"); out != listing {
@@ -102,11 +91,11 @@ func TestQuietCommand(t *testing.T) {
 	}{
 		"nothing found":  {[]string{"versions", "foo"}, "GET", "/packages/foo/versions", "[]", ""},
 		"sharing add":    {[]string{"sharing", "add", "added@example.com"}, "PUT", "/collaborators/added@example.com", "{}", ""},
-		"git rename":     {[]string{"git", "rename", "repo-name", "new-name"}, "PATCH", "/git/repos/me/repo-name", "{}", ""},
-		"git destroy":    {[]string{"git", "destroy", "repo-name", "--force"}, "DELETE", "/git/repos/me/repo-name", "{}", ""},
-		"git stack set":  {[]string{"git", "stack", "set", "repo-name", "fury-22"}, "PATCH", "/git/repos/me/repo-name", "{}", ""},
-		"git config set": {[]string{"git", "config", "set", "repo-name", "KEY2=VALUE2"}, "PATCH", "/git/repos/me/repo-name/config-vars", gitConfigResponse, ""},
-		"git rebuild":    {[]string{"git", "rebuild", "repo-name"}, "POST", "/git/repos/me/repo-name/builds", gitRebuildResponse, gitRebuildResponse},
+		"git rename":     {[]string{"git", "rename", "repo-name", "new-name"}, "PATCH", gitRepoPath, "{}", ""},
+		"git destroy":    {[]string{"git", "destroy", "repo-name", "--force"}, "DELETE", gitRepoPath, "{}", ""},
+		"git stack set":  {[]string{"git", "stack", "set", "repo-name", "fury-22"}, "PATCH", gitRepoPath, "{}", ""},
+		"git config set": {[]string{"git", "config", "set", "repo-name", "KEY2=VALUE2"}, "PATCH", gitConfigPath, gitConfigResponse, ""},
+		"git rebuild":    {[]string{"git", "rebuild", "repo-name"}, "POST", gitBuildsPath, gitRebuildResponse, gitRebuildResponse},
 		"logout":         {[]string{"logout", "--yes"}, "POST", "/logout", "", ""},
 		"login":          {[]string{"login", "--api-token", "abc123"}, "GET", "/users/me", whoamiResponse, ""},
 		"push":           {[]string{"push", samplePackagePath()}, "POST", "/uploads", pushResponse, ""},

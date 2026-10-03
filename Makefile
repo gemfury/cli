@@ -1,6 +1,8 @@
-GIT_DESCRIBE=$$(git describe --tags --always --match "v*")
+GIT_DESCRIBE=$$(git describe --tags --always --match "v*" | sed 's/^v//')
 GOLDFLAGS="-X main.Version=$(GIT_DESCRIBE)"
 GO_CMD?=go
+
+.PHONY: fury bin/linux bin/windows clean
 
 fury: # creates the Fury CLI binaries for current platform
 	$(GO_CMD) build -ldflags $(GOLDFLAGS) -o ./fury ./cmd/fury

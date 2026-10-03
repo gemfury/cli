@@ -119,8 +119,6 @@ func yankTarget(arg, versionFlag string) (pkg, ver string, ok bool) {
 }
 
 func filterVersions(cc context.Context, c *api.Client, pkg, ver string) ([]*api.Version, error) {
-	versions := []*api.Version{}
-
 	// Default search filters for listed versions
 	filter := url.Values{"name": {pkg}, "version": {ver}}
 
@@ -130,15 +128,7 @@ func filterVersions(cc context.Context, c *api.Client, pkg, ver string) ([]*api.
 		filter["kind"] = []string{kind}
 	}
 
-	// Paginate over version listings until no more pages
-	err := iterateAllPages(cc, func(pageReq *api.PaginationRequest) (*api.PaginationResponse, error) {
-		resp, err := c.Versions(cc, filter, pageReq)
-		if err != nil {
-			return nil, err
-		}
-		versions = append(versions, resp.Versions...)
-		return resp.Pagination, nil
+	return fetchAll[*api.Version](cc, func(cc context.Context, pageReq *api.PaginationRequest) (*api.VersionsResponse, error) {
+		return c.Versions(cc, filter, pageReq)
 	})
-
-	return versions, err
 }

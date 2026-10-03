@@ -17,9 +17,9 @@ func (c *Client) GitStacks(cc context.Context) ([]GitStack, error) {
 	return resp, nil
 }
 
-// Repo represents Git Config KV pair
+// GitStack represents Git build stack JSON
 type GitStack struct {
-	Name string
+	Name string `json:"name"`
 }
 
 // GitStackSet updates stack for a Gemfury Git repository

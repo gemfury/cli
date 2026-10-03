@@ -38,8 +38,32 @@ func TestMain(m *testing.M) {
 
 // Without a command, the root shows its help
 func TestRootCommand(t *testing.T) {
-	if out, exp := helpOutput(t, ""), helpOutput(t, "--help"); out != exp {
-		t.Errorf("Expected output to be %q, got %q", exp, out)
+	exp := helpOutput(t, "--help")
+	if out := helpOutput(t); out != exp {
+		t.Errorf("Expected help, got %q", out)
+	}
+}
+
+// --json is a flag of the commands that take it, listed in their help
+// and shown with it. Anywhere else it is unknown, as any unknown flag:
+// before the command, between commands, or with help or the version.
+func TestJSONFlagPlacement(t *testing.T) {
+	for _, args := range [][]string{{"packages", "--json", "--help"}, {"sharing", "--help", "--json"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			if out := helpOutput(t, args...); !strings.Contains(out, "--json") {
+				t.Errorf("Expected help listing --json, got %q", out)
+			}
+		})
+	}
+
+	for _, args := range [][]string{
+		{"--json", "sharing"}, {"git", "--json", "config", "get", "repo-name", "KEY2"},
+		{"--json", "--help"}, {"push", "--json", "--help"}, {"--json", "help", "push"},
+		{"help", "packages", "--json"}, {"--json", "--version"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			expectUsageError(t, args, "unknown flag: --json")
+		})
 	}
 }
 
@@ -72,6 +96,23 @@ func helpOutput(t *testing.T, args ...string) string {
 		t.Fatal(err)
 	}
 	return string(term.OutBytes())
+}
+
+// serving is a server to start for a test, which
+// responds with the pages of a listing, or with a body
+func serving(method, path string, code int, pages ...string) func(*testing.T) *httptest.Server {
+	return func(t *testing.T) *httptest.Server {
+		t.Helper()
+		return testutil.APIServerPaginated(t, method, path, pages, code)
+	}
+}
+
+// rootForTest is a root command to inspect, not to run: it has no
+// credentials and no API
+func rootForTest(t *testing.T) *cobra.Command {
+	t.Helper()
+	cc := cli.TestContext(t.Context(), terminal.NewForTest(), terminal.TestAuther("", "", nil))
+	return cli.NewRootCommand(cc)
 }
 
 // allCommands lists cmd and every command below it
@@ -275,36 +316,39 @@ func TestUsageErrorOutput(t *testing.T) {
 		{[]string{"sharing", "extra"}, `unknown command "extra" for "fury sharing"`},
 		{[]string{"whoami", "extra"}, `unknown command "extra" for "fury whoami"`},
 		{[]string{"logout", "now"}, `unknown command "now" for "fury logout"`},
-		{[]string{"packages", "--json"}, "unknown flag: --json"},
+		{[]string{"packages", "--nosuch"}, "unknown flag: --nosuch"},
 	}
 
 	for _, tc := range cases {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
-			server := offlineServer(t)
-
-			term := terminal.NewForTest()
-			cc := testContext(t, term, terminal.TestAuther("", "", nil), server)
-
-			err := runCommand(cc, tc.args)
-			if !cli.IsUsageError(err) {
-				t.Fatalf("Expected usage error, got: %v", err)
-			}
-
-			// Error and usage both go to stderr: the error once, then usage
-			expectProblems(t, term, "Error: "+tc.msg+"\n", "Usage:\n")
-
-			if ob := term.OutBytes(); len(ob) != 0 {
-				t.Errorf("Expected empty stdout, got %q", ob)
-			}
+			expectUsageError(t, tc.args, tc.msg)
 		})
+	}
+}
+
+// expectUsageError asserts that a command is a usage error reading msg,
+// for a user who is logged out and with no request of the API
+func expectUsageError(t *testing.T, args []string, msg string) {
+	t.Helper()
+	term := terminal.NewForTest()
+	cc := testContext(t, term, terminal.TestAuther("", "", nil), offlineServer(t))
+
+	err := runCommand(cc, args)
+	if !cli.IsUsageError(err) {
+		t.Fatalf("Expected usage error, got: %v", err)
+	}
+
+	// Error and usage both go to stderr: the error once, then usage
+	expectProblems(t, term, "Error: "+msg+"\n", "Usage:\n")
+
+	if ob := term.OutBytes(); len(ob) != 0 {
+		t.Errorf("Expected empty stdout, got %q", ob)
 	}
 }
 
 // Without Args, Cobra lets a subcommand silently ignore extra arguments
 func TestRunnableCommandsDeclareArgs(t *testing.T) {
-	cc := cli.TestContext(t.Context(), terminal.NewForTest(), terminal.TestAuther("", "", nil))
-
-	for _, cmd := range allCommands(cli.NewRootCommand(cc)) {
+	for _, cmd := range allCommands(rootForTest(t)) {
 		if cmd.Runnable() && cmd.Args == nil {
 			t.Errorf("Command %q has no Args check", cmd.CommandPath())
 		}
