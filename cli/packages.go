@@ -126,6 +126,8 @@ func iterateAll(cc context.Context, showSpinner bool, fn func(req *api.Paginatio
 		Limit: 100,
 	}
 
+	seenCursors := map[string]struct{}{}
+
 	// Spinner is shown only on a TTY, and only from the second page on
 	var stopSpinner func()
 	defer func() {
@@ -153,6 +155,11 @@ func iterateAll(cc context.Context, showSpinner bool, fn func(req *api.Paginatio
 		if pageReq.Page == "" {
 			break
 		}
+
+		if _, ok := seenCursors[pageReq.Page]; ok {
+			return fmt.Errorf("Repeated pagination cursor: %q", pageReq.Page)
+		}
+		seenCursors[pageReq.Page] = struct{}{}
 
 		if stopSpinner == nil && showSpinner {
 			stopSpinner = term.Spin(" Fetching ...")

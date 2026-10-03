@@ -174,6 +174,33 @@ func TestPackagesCommandCancelled(t *testing.T) {
 	}
 }
 
+// A pagination cursor that repeats would list forever, so it must fail
+func TestPackagesCommandRepeatedCursor(t *testing.T) {
+	cursors := []string{"a", "b", "a"} // The next page of each request
+	var requests atomic.Int32
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/packages", func(w http.ResponseWriter, r *http.Request) {
+			i := int(requests.Add(1)) - 1
+			if i >= len(cursors) {
+				w.WriteHeader(500)
+				return
+			}
+			w.Header().Set("Link", "</packages?page="+cursors[i]+">; rel=\"next\"")
+			w.Write([]byte(packagesResponses[0]))
+		})
+	})
+
+	term := terminal.NewForTest()
+	cc := testContext(t, term, terminal.TestAuther("user", "abc123", nil), server)
+	err := runCommand(cc, []string{"packages"})
+	if err == nil || !strings.Contains(err.Error(), "Repeated pagination cursor") {
+		t.Fatalf("Expected cursor error, got %v", err)
+	}
+	if n := requests.Load(); int(n) != len(cursors) {
+		t.Fatalf("Expected %d requests before the repeat, got %d", len(cursors), n)
+	}
+}
+
 // An unusable endpoint is reported as an error by every kind of request
 func TestCommandInvalidEndpoint(t *testing.T) {
 	for _, args := range [][]string{
