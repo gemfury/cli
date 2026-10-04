@@ -2,26 +2,41 @@ package cli
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 )
 
-var (
-	roundDurationRE = regexp.MustCompile(`^\d+\w`)
-)
-
-func timeStringWithAgo(t time.Time) string {
-	out := t.Local().Format("2006-01-02 15:04")
-
-	if ago := time.Since(t); ago < 24*time.Hour {
-		agoStr := ago.Round(time.Second).String()
-		if str := roundDurationRE.FindString(agoStr); str != "" {
-			out = fmt.Sprintf("%s (~ %s ago)", out, str)
-		}
+// timeString is a time as printed in a table, in local time. At a terminal
+// it has how long ago it was, when under a day. Piped, it has the zone
+// offset, as the output may be read in another zone, and no "ago", which
+// would give some rows more columns.
+func timeString(t time.Time, tty bool) string {
+	if t.IsZero() {
+		return "N/A" // Like the other fields the API leaves out
 	}
 
+	local := t.Local()
+	if !tty {
+		return local.Format("2006-01-02 15:04 -07:00")
+	}
+
+	out := local.Format("2006-01-02 15:04")
+	// A time ahead of the clock, by skew, has no "ago"
+	if ago := time.Since(t); ago >= 0 && ago < 24*time.Hour {
+		out += fmt.Sprintf(" (~ %s ago)", agoString(ago))
+	}
 	return out
+}
+
+// agoString is how long ago, in its largest whole unit: 2h for 2h30m
+func agoString(d time.Duration) string {
+	switch {
+	case d >= time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	case d >= time.Minute:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+	return fmt.Sprintf("%ds", int(d.Seconds()))
 }
 
 // packageKinds lists the package kinds of the API, for help only. They are

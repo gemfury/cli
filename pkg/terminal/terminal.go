@@ -28,7 +28,16 @@ type Terminal interface {
 
 	Spin(suffix string) func()
 	OpenBrowser(context.Context, string) bool
+
+	// IsInteractive reports whether there is a user to answer prompts: Stdin
+	// is a terminal rather than a pipe, a file, or closed, and asking is
+	// not turned off (see Unattended)
 	IsInteractive() bool
+
+	// IsOutTTY reports whether Stdout is a terminal rather than a pipe or
+	// a file: whether a person reads what is printed, as it is printed
+	IsOutTTY() bool
+
 	IOIn() io.ReadCloser
 	IOErr() io.Writer
 	IOOut() io.Writer
@@ -72,10 +81,12 @@ func (t term) IOIn() io.ReadCloser {
 	return t.ioIn
 }
 
-// IsInteractive reports whether there is a user to answer prompts, which
-// is when Stdin is a terminal rather than a pipe, a file, or closed
 func (t term) IsInteractive() bool {
 	return isTerminal(t.ioIn)
+}
+
+func (t term) IsOutTTY() bool {
+	return isTerminal(t.ioOut)
 }
 
 func (t term) RunPrompt(p *promptui.Prompt) (string, error) {

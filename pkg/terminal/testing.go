@@ -31,6 +31,7 @@ func NewForTest() *testTerm {
 
 type testTerm struct {
 	interactive    bool
+	outTTY         bool
 	prompts        map[string]string
 	streams        []*bytes.Buffer
 	bars, spinners int
@@ -45,6 +46,16 @@ func (tt testTerm) IsInteractive() bool {
 // SetInteractive(false) simulates a run without a terminal (pipe, CI)
 func (tt *testTerm) SetInteractive(interactive bool) {
 	tt.interactive = interactive
+}
+
+// Tests read the output as a program would, not a person, unless told otherwise
+func (tt testTerm) IsOutTTY() bool {
+	return tt.outTTY
+}
+
+// SetOutTTY(true) simulates output that is read at a terminal
+func (tt *testTerm) SetOutTTY(outTTY bool) {
+	tt.outTTY = outTTY
 }
 
 func (tt testTerm) ErrBytes() []byte {

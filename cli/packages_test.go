@@ -8,10 +8,12 @@ import (
 
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // The second package has a prerelease alone, and so no release
@@ -151,26 +153,83 @@ func TestVersionsCommandSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exp := "1.2.3 user1 2011-05-26 17:39 js foo-1.2.3.tgz 3.2.1 user2 2011-01-26 16:44 js foo-3.2.1.tgz"
+	exp := "1.2.3 user1 2011-05-26 17:39 -07:00 js foo-1.2.3.tgz 3.2.1 user2 2011-01-26 16:44 -08:00 js foo-3.2.1.tgz"
 	if outStr := compactString(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
 	}
 }
 
-// A version without an uploader or a kind is listed with N/A for them
+// A version without an uploader, a time, or a kind is listed with N/A for them
 func TestVersionsCommandUnknownFields(t *testing.T) {
 	term := terminal.NewForTest()
-	body := `[{"version": "1.0.0", "filename": "foo-1.0.0.tgz", "created_at": "2011-01-27T00:44:00+00:00"}]`
+	body := `[{"version": "1.0.0", "filename": "foo-1.0.0.tgz"}]`
 	server := testutil.APIServer(t, "GET", "/packages/pkg-name/versions", body, 200)
 
 	cc := testContext(t, term, terminal.TestAuther("user", "abc123", nil), server)
-	if err := runCommand(cc, []string{"versions", "pkg-name"}); err != nil {
+	if err := runCommandNoErr(cc, []string{"versions", "pkg-name"}); err != nil {
 		t.Fatal(err)
 	}
 
-	exp := "1.0.0 N/A 2011-01-26 16:44 N/A foo-1.0.0.tgz"
+	exp := "1.0.0 N/A N/A N/A foo-1.0.0.tgz"
 	if outStr := compactString(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
 		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	}
+}
+
+// At a terminal, the time has the "ago" rather than the zone offset, which
+// the other tests have, as they are piped by default. The "ago" is under
+// a day, rounded down, and not of a time ahead of the clock.
+func TestVersionsCommandAtTerminal(t *testing.T) {
+	now := time.Now()
+	cases := []struct {
+		age time.Duration
+		ago string // What follows the time, spacing included, if anything
+	}{
+		{5 * time.Minute, " (~ 5m ago)"},
+		{2*time.Hour + 30*time.Minute, " (~ 2h ago)"},
+		{36 * time.Hour, ""},
+		{-time.Minute, ""},
+	}
+
+	var body, rows []string
+	for i, c := range cases {
+		ver := fmt.Sprintf("%d.0.0", i)
+		created := now.Add(-c.age)
+		body = append(body, fmt.Sprintf(`{"version": %q, "filename": "foo-%s.tgz", "created_at": %q}`,
+			ver, ver, created.Format(time.RFC3339)))
+		rows = append(rows, fmt.Sprintf("%s N/A %s%s N/A foo-%s.tgz",
+			ver, created.Local().Format("2006-01-02 15:04"), c.ago, ver))
+	}
+
+	term := terminal.NewForTest()
+	term.SetOutTTY(true)
+	server := testutil.APIServer(t, "GET", "/packages/pkg-name/versions", "["+strings.Join(body, ",")+"]", 200)
+
+	cc := testContext(t, term, terminal.TestAuther("user", "abc123", nil), server)
+	if err := runCommandNoErr(cc, []string{"versions", "pkg-name"}); err != nil {
+		t.Fatal(err)
+	}
+
+	exp := "version created_by created_at kind filename " + strings.Join(rows, " ")
+	if outStr := compactString(term.OutBytes()); !strings.HasSuffix(outStr, exp) {
+		t.Errorf("Expected output to include %q, got %q", exp, outStr)
+	}
+}
+
+// The boundaries of an "ago" are a second apart, too close to hit
+// through a command as the clock moves, so the function is tested on its own
+func TestAgoString(t *testing.T) {
+	for d, exp := range map[time.Duration]string{
+		0:                              "0s",
+		time.Minute - time.Millisecond: "59s",
+		time.Minute:                    "1m",
+		time.Hour - time.Second:        "59m",
+		time.Hour:                      "1h",
+		24*time.Hour - time.Second:     "23h",
+	} {
+		if got := cli.AgoString(d); got != exp {
+			t.Errorf("Expected %q for %s, got %q", exp, d, got)
+		}
 	}
 }
 

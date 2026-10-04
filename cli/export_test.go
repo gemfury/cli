@@ -27,6 +27,9 @@ func setDuring[T any](t *testing.T, v *T, to T) {
 // PackageKinds exposes the package kinds listed in help
 const PackageKinds = packageKinds
 
+// AgoString exposes how long ago a time is said to be at a terminal
+var AgoString = agoString
+
 // IsGroup reports whether cmd only groups subcommands (see groupCommand)
 func IsGroup(cmd *cobra.Command) bool {
 	return cmd.Annotations[groupKey] == "true"

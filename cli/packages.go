@@ -76,11 +76,12 @@ func listVersions(cmd *cobra.Command, args []string) error {
 
 func termPrintVersions(term terminal.Terminal, versions []*api.Version) {
 	w := tabwriter.NewWriter(term.IOOut(), 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "version\tuploaded_by\tuploaded_at\tkind\tfilename\n")
+	fmt.Fprintf(w, "version\tcreated_by\tcreated_at\tkind\tfilename\n")
 
+	tty := term.IsOutTTY()
 	for _, v := range versions {
-		uploadedAt := timeStringWithAgo(v.CreatedAt)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", v.Version, v.DisplayCreatedBy(), uploadedAt, v.DisplayKind(), v.Filename)
+		createdAt := timeString(v.CreatedAt, tty)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", v.Version, v.DisplayCreatedBy(), createdAt, v.DisplayKind(), v.Filename)
 	}
 
 	w.Flush()
