@@ -115,17 +115,31 @@ func TestLoginCommandFallback(t *testing.T) {
 	}
 }
 
-// errUnsaved is the failure of unsavingAuth
-var errUnsaved = errors.New("read-only")
+// errReadOnly is the failure of unsavingAuth and unwipingAuth
+var errReadOnly = errors.New("read-only")
 
-// unsavingAuth reads the saved session as any Auther,
-// and fails to save one, or to wipe it
+// unsavingAuth reads and wipes the saved session as any Auther,
+// and fails to save one
 type unsavingAuth struct {
 	terminal.Auther
 }
 
-func (unsavingAuth) Append(string, string) error { return errUnsaved }
-func (unsavingAuth) Wipe() error                 { return errUnsaved }
+func (unsavingAuth) Append(string, string) error { return errReadOnly }
+
+// unwipingAuth reads the saved session as any Auther, and fails to wipe it
+type unwipingAuth struct {
+	terminal.Auther
+}
+
+func (unwipingAuth) Wipe() error { return errReadOnly }
+
+// revoking records the token of each revocation, which succeeds
+func revoking(revoked *[]string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		*revoked = append(*revoked, r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
 
 // A token that cannot be saved is revoked, rather than left valid
 // where no one has it
@@ -135,17 +149,14 @@ func TestLoginCommandNotSaved(t *testing.T) {
 
 	var revoked []string
 	server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
-		h.HandleFunc("POST /logout", func(w http.ResponseWriter, r *http.Request) {
-			revoked = append(revoked, r.Header.Get("Authorization"))
-			w.Write([]byte("{}"))
-		})
+		h.HandleFunc("/logout", revoking(&revoked))
 	})
 
 	// Add any key for the "open browser" prompt
 	term.InWrite([]byte("!"))
 
 	cc := testContext(t, term, auth, server)
-	if err := runCommand(cc, []string{"login"}); !errors.Is(err, errUnsaved) {
+	if err := runCommand(cc, []string{"login"}); !errors.Is(err, errReadOnly) {
 		t.Errorf("Expected the failure to save, got: %v", err)
 	}
 
@@ -159,13 +170,13 @@ func TestLoginCommandNotSaved(t *testing.T) {
 func TestSessionNotWiped(t *testing.T) {
 	for _, args := range [][]string{{"logout", "--yes"}, {"login"}} {
 		t.Run(args[0], func(t *testing.T) {
-			auth := unsavingAuth{terminal.TestAuther("user", "abc123", nil)}
+			auth := unwipingAuth{terminal.TestAuther("user", "abc123", nil)}
 			term := terminal.NewForTest()
 
 			server := testutil.APIServer(t, "POST", "/logout", "{}", 200)
 			cc := testContext(t, term, auth, server)
 
-			if err := runCommand(cc, args); !errors.Is(err, errUnsaved) {
+			if err := runCommand(cc, args); !errors.Is(err, errReadOnly) {
 				t.Errorf("Expected the failure to wipe, got: %v", err)
 			}
 
@@ -335,7 +346,7 @@ func TestLoginCommandNonInteractive(t *testing.T) {
 					t.Fatalf("Expected cli.ErrLoginUnattended, got: %v", err)
 				}
 
-				expectOutput(t, term, "", "Error: Cannot login with no one to ask. Set FURY_TOKEN to authenticate instead.\n")
+				expectOutput(t, term, "", "Error: Cannot login with no one to ask. Pass --api-token to save a session instead.\n")
 				expectCredentials(t, auth, "", saved)
 			})
 		}
@@ -347,15 +358,10 @@ func TestLoginCommandReplacesSavedToken(t *testing.T) {
 	auth := terminal.TestAuther("old@example.com", "old-token", nil)
 	term := terminal.NewForTest()
 
-	var revoked string
+	var revoked []string
 	server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
-		h.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
-			revoked = r.Header.Get("Authorization")
-			w.WriteHeader(http.StatusNoContent)
-		})
-		h.HandleFunc("/users/me", func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte(whoamiResponse))
-		})
+		h.HandleFunc("/logout", revoking(&revoked))
+		h.HandleFunc("/users/me", respondWith(200, whoamiResponse))
 	})
 
 	cc := testContext(t, term, auth, server)
@@ -364,56 +370,207 @@ func TestLoginCommandReplacesSavedToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if exp := "old-token"; revoked != exp {
-		t.Errorf("Expected %q to be revoked, got %q", exp, revoked)
+	if exp := []string{"old-token"}; !slices.Equal(revoked, exp) {
+		t.Errorf("Expected revoked tokens %q, got %q", exp, revoked)
 	}
 
 	expectCredentials(t, auth, "u@example.com", "token-abc-123")
 }
 
-// With an inline token, login only verifies that token;
+// With a token from the environment, login only verifies that token;
 // saved credentials are neither revoked nor replaced
-func TestLoginCommandWithInlineTokenKeepsSaved(t *testing.T) {
+func TestLoginCommandVerifiesEnvToken(t *testing.T) {
+	t.Setenv("FURY_TOKEN", "env-token")
+	auth := terminal.TestAuther("old@example.com", "old-token", nil)
+	term := terminal.NewForTest()
+
+	// Only /users/me: a revoke would be an unexpected request, failing the test
+	server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
+		h.HandleFunc("/users/me", func(w http.ResponseWriter, r *http.Request) {
+			if a := r.Header.Get("Authorization"); a != "env-token" {
+				t.Errorf("Expected the environment token to be verified, got %q", a)
+			}
+			w.Write([]byte(whoamiResponse))
+		})
+	})
+
+	cc := testContext(t, term, auth, server)
+	if err := runCommandNoErr(cc, []string{"login"}); err != nil {
+		t.Fatal(err)
+	}
+
+	expectOutput(t, term, "API token belongs to \"joetest\"\n", "")
+	expectCredentials(t, auth, "old@example.com", "old-token")
+}
+
+// With a token by the flag, given or read from stdin, login verifies it,
+// then saves it as the session. The one saved before is revoked, unless
+// it is the same token
+func TestLoginCommandSavesTokenFlag(t *testing.T) {
 	for name, tc := range map[string]struct {
-		env  string
-		args []string
+		token   string            // Given to --api-token
+		stdin   string            // Piped, when there is no user
+		prompt  map[string]string // Asked, when there is
+		saved   string            // The token saved before
+		revoked []string
 	}{
-		"flag": {"", []string{"login", "--api-token", "inline-token"}},
-		"env":  {"inline-token", []string{"login"}},
+		"flag":         {"new-token", "", nil, "old-token", []string{"old-token"}},
+		"stdin piped":  {"-", "new-token\n", nil, "old-token", []string{"old-token"}},
+		"stdin prompt": {"-", "", map[string]string{"API token: ": "new-token"}, "old-token", []string{"old-token"}},
+		"same token":   {"new-token", "", nil, "new-token", nil},
 	} {
 		t.Run(name, func(t *testing.T) {
-			t.Setenv("FURY_TOKEN", tc.env)
-			auth := terminal.TestAuther("old@example.com", "old-token", nil)
+			auth := terminal.TestAuther("old@example.com", tc.saved, nil)
 			term := terminal.NewForTest()
+			term.SetInteractive(tc.prompt != nil)
+			term.InWrite([]byte(tc.stdin))
+			term.SetPromptResponses(tc.prompt)
 
+			var revoked []string
 			server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
-				h.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
-					t.Errorf("Unexpected revoke of %q", r.Header.Get("Authorization"))
-					w.WriteHeader(http.StatusNoContent)
-				})
+				h.HandleFunc("/logout", revoking(&revoked))
 				h.HandleFunc("/users/me", func(w http.ResponseWriter, r *http.Request) {
-					if a := r.Header.Get("Authorization"); a != "inline-token" {
-						t.Errorf("Expected inline token to be verified, got %q", a)
+					if a := r.Header.Get("Authorization"); a != "new-token" {
+						t.Errorf("Expected the new token to be verified, got %q", a)
 					}
 					w.Write([]byte(whoamiResponse))
 				})
 			})
 
 			cc := testContext(t, term, auth, server)
-			if err := runCommandNoErr(cc, tc.args); err != nil {
+			if err := runCommandNoErr(cc, []string{"login", "--api-token", tc.token}); err != nil {
 				t.Fatal(err)
 			}
 
-			expectOutput(t, term, "API token belongs to \"joetest\"\n", "")
+			expectOutput(t, term, "You are logged in as \"joe@example.com\"\n", "")
+			expectCredentials(t, auth, "joe@example.com", "new-token")
+			if !slices.Equal(revoked, tc.revoked) {
+				t.Errorf("Expected revoked tokens %q, got %q", tc.revoked, revoked)
+			}
+		})
+	}
+}
 
+// A token of an organization, which has no email, is saved by its username
+func TestLoginCommandSavesOrgToken(t *testing.T) {
+	auth := terminal.TestAuther("", "", nil)
+	term := terminal.NewForTest()
+
+	const orgResponse = `{"name": "test-org", "type": "org", "username": "test-org"}`
+	server := testutil.APIServer(t, "GET", "/users/me", orgResponse, 200)
+
+	cc := testContext(t, term, auth, server)
+	if err := runCommandNoErr(cc, []string{"login", "--api-token", "org-token"}); err != nil {
+		t.Fatal(err)
+	}
+
+	expectOutput(t, term, "You are logged in as \"test-org\"\n", "")
+	expectCredentials(t, auth, "test-org", "org-token")
+}
+
+// A token that is refused replaces nothing: the saved session is kept
+func TestLoginCommandTokenRefused(t *testing.T) {
+	t.Setenv("FURY_TOKEN", "bad-token")
+
+	for name, args := range map[string][]string{
+		"flag": {"login", "--api-token", "bad-token"},
+		"env":  {"login"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			auth := terminal.TestAuther("old@example.com", "old-token", nil)
+			term := terminal.NewForTest()
+
+			server := testutil.APIServer(t, "GET", "/users/me", `{"error": "Token has expired"}`, 401)
+
+			cc := testContext(t, term, auth, server)
+			expectExitStatus(t, term, runCommand(cc, args), cli.ExitAuth)
+			expectOutput(t, term, "", "Error: Token has expired\n")
 			expectCredentials(t, auth, "old@example.com", "old-token")
 		})
 	}
 }
 
-func TestLoginCommandUnauthorized(t *testing.T) {
-	server := testutil.APIServer(t, "GET", "/users/me", whoamiResponse, 200)
-	testCommandLoginPreCheck(t, []string{"login"}, server, noLoginOpt)
+// When the server refuses to revoke the saved session, the user is asked
+// whether to go on without it, as at a browser login; with no one to ask,
+// the login fails. The new token is verified by then, and saved only
+// once that is settled.
+func TestLoginCommandTokenRevokeFails(t *testing.T) {
+	const confirm = "Do you want to ignore & continue with your login? [y/N]"
+
+	for name, tc := range map[string]struct {
+		flags  []string
+		noUser bool
+		answer string // To confirm, when asked
+		cause  error  // Of the failure, or nil when saved
+	}{
+		"--yes":       {[]string{"--yes"}, false, "", nil},
+		"confirmed":   {nil, false, "y", nil},
+		"declined":    {nil, false, "ABORT", api.ErrFuryServer},
+		"interrupted": {nil, false, "INTERRUPT", context.Canceled},
+		"piped":       {nil, true, "", terminal.ErrNoInput},
+	} {
+		t.Run(name, func(t *testing.T) {
+			auth := terminal.TestAuther("old@example.com", "old-token", nil)
+			term := terminal.NewForTest()
+			term.SetInteractive(!tc.noUser)
+			term.SetPromptResponses(map[string]string{confirm: tc.answer})
+
+			server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
+				h.HandleFunc("/logout", respondWith(500, ""))
+				h.HandleFunc("/users/me", respondWith(200, whoamiResponse))
+			})
+
+			cc := testContext(t, term, auth, server)
+			err := runCommand(cc, slices.Concat([]string{"login", "--api-token", "new-token"}, tc.flags))
+			if tc.cause == nil {
+				if err != nil {
+					t.Fatal(err)
+				}
+				expectCredentials(t, auth, "joe@example.com", "new-token")
+			} else {
+				if !errors.Is(err, tc.cause) {
+					t.Errorf("Expected %v within error, got: %v", tc.cause, err)
+				}
+				expectCredentials(t, auth, "old@example.com", "old-token")
+			}
+
+			expectProblems(t, term, "Error deactivating your old CLI credentials: ")
+		})
+	}
+}
+
+// A given token that cannot be saved is not revoked, unlike one minted by
+// a browser login, as it is the user's to keep. The session saved before
+// is gone by then.
+func TestLoginCommandTokenNotSaved(t *testing.T) {
+	for name, tc := range map[string]struct {
+		saved   string
+		revoked []string
+	}{
+		"old session": {"old-token", []string{"old-token"}},
+		"no session":  {"", nil},
+	} {
+		t.Run(name, func(t *testing.T) {
+			auth := unsavingAuth{terminal.TestAuther("", tc.saved, nil)}
+			term := terminal.NewForTest()
+
+			var revoked []string
+			server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
+				h.HandleFunc("/logout", revoking(&revoked))
+				h.HandleFunc("/users/me", respondWith(200, whoamiResponse))
+			})
+
+			cc := testContext(t, term, auth, server)
+			if err := runCommand(cc, []string{"login", "--api-token", "new-token"}); !errors.Is(err, errReadOnly) {
+				t.Errorf("Expected the failure to save, got: %v", err)
+			}
+
+			if !slices.Equal(revoked, tc.revoked) {
+				t.Errorf("Expected revoked tokens %q, got %q", tc.revoked, revoked)
+			}
+			expectCredentials(t, auth, "", "")
+		})
+	}
 }
 
 // Logout acts on the saved credentials, whatever FURY_TOKEN holds
@@ -425,15 +582,9 @@ func TestLogoutCommandSuccess(t *testing.T) {
 			term := terminal.NewForTest()
 
 			// Fire up test server; the saved token must be the one revoked
-			var revoked int
+			var revoked []string
 			server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
-				h.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
-					if a := r.Header.Get("Authorization"); a != "abc123" {
-						t.Errorf("Expected saved token to be revoked, got %q", a)
-					}
-					revoked++
-					w.WriteHeader(http.StatusNoContent)
-				})
+				h.HandleFunc("/logout", revoking(&revoked))
 			})
 
 			term.SetPromptResponses(map[string]string{
@@ -447,8 +598,8 @@ func TestLogoutCommandSuccess(t *testing.T) {
 
 			expectOutput(t, term, "You have been logged out\n", "")
 
-			if revoked != 1 {
-				t.Errorf("Expected one revocation, got %d", revoked)
+			if exp := []string{"abc123"}; !slices.Equal(revoked, exp) {
+				t.Errorf("Expected revoked tokens %q, got %q", exp, revoked)
 			}
 
 			expectCredentials(t, auth, "", "")
@@ -489,10 +640,7 @@ func TestLogoutCommandRevokeFails(t *testing.T) {
 				t.Errorf("Expected interrupted=%v, got: %v", tc.interrupted, err)
 			}
 
-			errStr := string(term.ErrBytes())
-			if exp := "Error deactivating your old CLI credentials: "; !strings.HasPrefix(errStr, exp) {
-				t.Errorf("Expected revoke failure on stderr, got %q", errStr)
-			}
+			expectProblems(t, term, "Error deactivating your old CLI credentials: ")
 
 			if wiped := auth.User == "" && auth.Pass == ""; wiped != tc.wiped {
 				t.Errorf("Expected wiped=%v, got auth %+v", tc.wiped, auth)
@@ -548,21 +696,27 @@ func TestLogoutCommandLoggedOut(t *testing.T) {
 	}
 }
 
-// Logout with --api-token is a usage error: nothing is revoked or wiped
+// Logout rejects --api-token as a usage error, without reading stdin
+// for "-": nothing is revoked or wiped
 func TestLogoutCommandWithTokenFlag(t *testing.T) {
-	auth := terminal.TestAuther("user", "abc123", nil)
-	term := terminal.NewForTest()
+	for _, token := range []string{"other", "-"} {
+		t.Run(token, func(t *testing.T) {
+			auth := terminal.TestAuther("user", "abc123", nil)
+			term := terminal.NewForTest()
 
-	// Any request would be a wrongful revocation
-	server := offlineServer(t)
+			// Any request would be a wrongful revocation
+			server := offlineServer(t)
 
-	cc := testContext(t, term, auth, server)
-	err := runCommand(cc, []string{"logout", "--api-token", "other"})
-	if !cli.IsUsageError(err) {
-		t.Fatalf("Expected usage error, got: %v", err)
+			cc := testContext(t, term, auth, server)
+			err := runCommand(cc, []string{"logout", "--api-token", token})
+			if !cli.IsUsageError(err) {
+				t.Fatalf("Expected usage error, got: %v", err)
+			}
+
+			expectProblems(t, term, "Error: Logout clears saved credentials only; do not pass --api-token\n")
+			expectCredentials(t, auth, "user", "abc123")
+		})
 	}
-
-	expectCredentials(t, auth, "user", "abc123")
 }
 
 // Credentials are retained unless confirmed

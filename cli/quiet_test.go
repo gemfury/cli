@@ -79,8 +79,9 @@ func TestQuietListing(t *testing.T) {
 	}
 }
 
-// With --quiet, only a result is printed: not that
-// something was changed, nor that nothing was found
+// With --quiet, only a result is printed: not that something was changed,
+// nor that nothing was found. The token given to "login" is the saved
+// one, so nothing is revoked first.
 func TestQuietCommand(t *testing.T) {
 	for name, tc := range map[string]struct {
 		args   []string

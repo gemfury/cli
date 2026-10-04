@@ -1,3 +1,10 @@
 .DS_Store
 /coverage.out
 /dist/
+
+# Built by make, go build, and go test -c
+/fury.exe
+/fury
+/main
+/bin/
+*.test

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"context"
 )
 
@@ -19,6 +20,12 @@ type AccountResponse struct {
 	Type     string `json:"type"`
 	Email    string `json:"email"`
 	Username string `json:"username"`
+}
+
+// Login is what a session of the account is saved by, and known to Git
+// as: its email, or its username for an organization, which has none
+func (a AccountResponse) Login() string {
+	return cmp.Or(a.Email, a.Username)
 }
 
 // AccountBasic represents the Account JSON fields common to every account

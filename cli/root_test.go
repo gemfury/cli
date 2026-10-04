@@ -125,12 +125,9 @@ func allCommands(cmd *cobra.Command) []*cobra.Command {
 }
 
 // testContext builds a command context with both API endpoints pointed at server
-func testContext(t *testing.T, term terminal.Terminal, auth terminal.Auther, server *httptest.Server, opts ...testOption) context.Context {
+func testContext(t *testing.T, term terminal.Terminal, auth terminal.Auther, server *httptest.Server) context.Context {
 	t.Helper()
 	cc := cli.TestContext(t.Context(), term, auth)
-	for _, opt := range opts {
-		cc = opt(cc)
-	}
 
 	flags := ctx.GlobalFlags(cc)
 	flags.PushEndpoint = server.URL
@@ -230,11 +227,11 @@ func unusedAuther() terminal.Auther {
 }
 
 // We first test with manual (prompt) login, and then test with "--api-token" flag
-func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Server, opts ...testOption) {
+func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Server) {
 	t.Helper()
 	auth := terminal.TestAuther("", "", nil)
 	term := terminal.NewForTest()
-	cc := testContext(t, term, auth, server, opts...)
+	cc := testContext(t, term, auth, server)
 
 	// Prepare for browser login prompt
 	term.InWrite([]byte("!"))
@@ -251,8 +248,7 @@ func testCommandLoginPreCheck(t *testing.T, args []string, server *httptest.Serv
 		t.Errorf("Expected pass %q, got %q", exp, p)
 	}
 
-	// Testing with "--api-token" should skip calling Auth() on TestAuther.
-	// The context options only shape the logged-out run above.
+	// Testing with "--api-token" should skip calling Auth() on TestAuther
 	cc = testContext(t, term, unusedAuther(), server)
 
 	args = append(args, "--api-token", "abc123")
@@ -554,13 +550,4 @@ func TestConfirmationNeeded(t *testing.T) {
 			})
 		}
 	}
-}
-
-// Context altering options added to test commands
-type testOption func(context.Context) context.Context
-
-// No login option
-func noLoginOpt(cc context.Context) context.Context {
-	ctx.Auther(cc).Wipe()
-	return cc
 }

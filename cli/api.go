@@ -8,6 +8,7 @@ import (
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 
+	"bufio"
 	"context"
 	"errors"
 	"os"
@@ -45,17 +46,53 @@ func newAPIClientWithToken(cc context.Context, token string) *api.Client {
 
 // Extract authentication token from context (inline or saved by "login")
 func contextAuthToken(cc context.Context) (string, error) {
-	if token := inlineAuthToken(cc); token != "" {
-		return token, nil
+	if token, err := inlineAuthToken(cc); token != "" || err != nil {
+		return token, err
 	}
 	_, token, err := ctx.Auther(cc).Auth()
 	return token, err
 }
 
-// inlineAuthToken is the token given for this invocation,
-// rather than saved by "login": --api-token or else FURY_TOKEN
-func inlineAuthToken(cc context.Context) string {
-	return flagOrEnv(ctx.GlobalFlags(cc).AuthToken, "FURY_TOKEN")
+// inlineAuthToken is the token given for this invocation, rather than
+// saved by "login": --api-token or else FURY_TOKEN. With --api-token -,
+// the token is read from stdin once, and kept for the rest of the run.
+func inlineAuthToken(cc context.Context) (string, error) {
+	flags := ctx.GlobalFlags(cc)
+	if flags.AuthToken == "-" {
+		token, err := readToken(ctx.Terminal(cc))
+		if err != nil {
+			return "", err
+		}
+		flags.AuthToken = token
+	}
+	return flagOrEnv(flags.AuthToken, "FURY_TOKEN"), nil
+}
+
+// readToken reads the token for --api-token -: asked for, masked, when
+// there is a user to ask, or else the first line of stdin
+func readToken(term terminal.Terminal) (string, error) {
+	var token string
+	var err error
+
+	if term.IsInteractive() {
+		token, err = term.RunPrompt(&promptui.Prompt{Label: "API token: ", Mask: '*'})
+		if errors.Is(err, promptui.ErrInterrupt) || errors.Is(err, promptui.ErrEOF) {
+			err = context.Canceled // Ctrl-C or Ctrl-D interrupts the command, as at a y/N question
+		}
+	} else {
+		in := bufio.NewScanner(term.IOIn())
+		in.Scan() // Nothing to read leaves the token empty, which is refused below
+		token, err = in.Text(), in.Err()
+	}
+
+	if errors.Is(err, bufio.ErrTooLong) {
+		return "", usageErrorf("The token given for --api-token - is too long")
+	} else if err != nil {
+		return "", err
+	} else if token = strings.TrimSpace(token); token == "" || token == "-" { // "-" would be read again
+		return "", usageErrorf("No token was given for --api-token -")
+	}
+	return token, nil
 }
 
 // contextAccount is the account to act on: --account or else FURY_ACCOUNT.
@@ -120,7 +157,7 @@ var ErrNotLoggedIn = errors.New(`Not logged in. Set FURY_TOKEN or run "fury logi
 
 // ErrLoginUnattended is returned by "login" when there is no user to ask
 // at the terminal, or none to be asked, whatever the saved credentials
-var ErrLoginUnattended = errors.New("Cannot login with no one to ask. Set FURY_TOKEN to authenticate instead.")
+var ErrLoginUnattended = errors.New("Cannot login with no one to ask. Pass --api-token to save a session instead.")
 
 func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResponse, error) {
 	cc := cmd.Context()
@@ -162,14 +199,23 @@ func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResp
 
 	// Save credentials for future commands. A token that
 	// is saved nowhere is not left valid either.
-	auth := ctx.Auther(cc)
-	if err := auth.Append(resp.User.Email, resp.Token); err != nil {
+	if err := saveSession(cc, resp.User.Login(), resp.Token); err != nil {
 		newAPIClientWithToken(cc, resp.Token).Logout(cc)
 		return nil, err
 	}
 
-	// Say so when the session is not in the keychain, where it is expected
-	// to be, or when Git is not set to ask this CLI for it
+	return &resp.User, nil
+}
+
+// saveSession saves the session for the commands that follow, and tells
+// the user when it is not in the keychain, where it is expected to be, or
+// when Git is not set to ask this CLI for it
+func saveSession(cc context.Context, email, token string) error {
+	auth := ctx.Auther(cc)
+	if err := auth.Append(email, token); err != nil {
+		return err
+	}
+
 	if fb, ok := auth.(terminal.FallbackAuther); ok {
 		term := ctx.Terminal(cc)
 		if path := fb.Fallback(); path != "" {
@@ -180,7 +226,7 @@ func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResp
 		}
 	}
 
-	return &resp.User, nil
+	return nil
 }
 
 // loginPollTimeout is how long browserLogin waits for the user to approve
