@@ -456,7 +456,7 @@ func TestLoginCommandSavesOrgToken(t *testing.T) {
 	auth := terminal.TestAuther("", "", nil)
 	term := terminal.NewForTest()
 
-	const orgResponse = `{"name": "test-org", "type": "org", "username": "test-org"}`
+	const orgResponse = `{"name": "test-org", "username": "test-org"}`
 	server := testutil.APIServer(t, "GET", "/users/me", orgResponse, 200)
 
 	cc := testContext(t, term, auth, server)
@@ -791,14 +791,8 @@ func TestInteractiveLoginCancelled(t *testing.T) {
 func pendingLoginServer(t *testing.T, onPoll func()) *httptest.Server {
 	t.Helper()
 	return testutil.APIServerCustom(t, func(h *http.ServeMux) {
-		h.HandleFunc("/cli/auth", func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == "POST" {
-				w.Write([]byte(loginCreateResponse))
-				return
-			}
-			onPoll()
-			<-r.Context().Done()
-		})
+		h.HandleFunc("POST /cli/auth", respondWith(200, loginCreateResponse))
+		h.HandleFunc("GET /cli/auth", stall(onPoll))
 	})
 }
 
@@ -902,10 +896,12 @@ func TestLoginCommandPolling(t *testing.T) {
 
 // A browser login that is never approved times out, poll in flight or not
 func TestLoginCommandTimeout(t *testing.T) {
+	t.Setenv("FURY_RETRIES", "3") // Retries are on: a poll cut short by the timeout is not sent again
 	auth := terminal.TestAuther("", "", nil)
 	term := terminal.NewForTest()
 
-	server := pendingLoginServer(t, func() {})
+	var polls atomic.Int32
+	server := pendingLoginServer(t, func() { polls.Add(1) })
 
 	cli.SetLoginPollTimeout(t, 100*time.Millisecond)
 	cc := testContext(t, term, auth, server)
@@ -917,4 +913,7 @@ func TestLoginCommandTimeout(t *testing.T) {
 	}
 
 	expectErrOutput(t, term, "Error: Operation timed out. Try again later.\n")
+	if n := polls.Load(); n != 1 {
+		t.Errorf("Expected 1 poll, got %d", n)
+	}
 }

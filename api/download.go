@@ -53,10 +53,10 @@ func (c *Client) DownloadVersion(cc context.Context, v *VersionFile) (io.ReadClo
 		return nil, 0, fmt.Errorf("Download URL %q is not served by %s", v.DownloadURL, c.Endpoint)
 	}
 
-	resp, err := c.newRequest(cc, "GET", path, true).doCommon()
+	resp, err := c.newLongRequest(cc, "GET", path, true).doCommon()
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return resp.Body, resp.ContentLength, nil
+	return timeoutBody{resp.Body}, resp.ContentLength, nil
 }

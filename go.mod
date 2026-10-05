@@ -7,6 +7,7 @@ require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/cenkalti/backoff/v7 v7.0.1
 	github.com/cheggaaa/pb/v3 v3.2.1
+	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/manifoldco/promptui v0.9.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
@@ -23,6 +24,7 @@ require (
 	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect

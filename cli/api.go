@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -23,14 +24,23 @@ func newAPIClient(cc context.Context) (*api.Client, error) {
 		return nil, err
 	}
 
-	return newAPIClientWithToken(cc, token), nil
+	return newAPIClientWithToken(cc, token)
 }
 
 // Initialize new Gemfury API client with an explicit token,
 // bypassing the usual resolution by contextAuthToken
-func newAPIClientWithToken(cc context.Context, token string) *api.Client {
+func newAPIClientWithToken(cc context.Context, token string) (*api.Client, error) {
 	flags := ctx.GlobalFlags(cc)
 	c := api.NewClient(token, contextAccount(cc))
+
+	// FURY_RETRIES overrides the default count
+	if env := strings.TrimSpace(os.Getenv("FURY_RETRIES")); env != "" {
+		retries, err := strconv.Atoi(env)
+		if err != nil || retries < 0 {
+			return nil, usageErrorf("FURY_RETRIES must be a count, not %q", env)
+		}
+		c.Retries = retries
+	}
 
 	// Endpoint overrides (testing, staging). The client joins paths onto
 	// these and compares URLs against them, so normalize away a trailing "/".
@@ -41,7 +51,20 @@ func newAPIClientWithToken(cc context.Context, token string) *api.Client {
 		c.Endpoint = strings.TrimSuffix(e, "/")
 	}
 
-	return c
+	// --timeout is that of every request, long ones included; zero is the default
+	if d := flags.HTTPTimeout; d < 0 {
+		return nil, usageErrorf("--timeout cannot be negative: %s", d)
+	} else if d > 0 {
+		c.Timeout, c.LongTimeout = d, d
+	}
+
+	// A notice of a wait is not a warning, so --quiet hides it; EPrintf alone would not
+	if !flags.Quiet {
+		term := ctx.Terminal(cc)
+		c.OnRetry = func(notice string) { term.EPrintf("%s\n", notice) }
+	}
+
+	return c, nil
 }
 
 // Extract authentication token from context (inline or saved by "login")
@@ -200,7 +223,9 @@ func ensureAuthenticated(cmd *cobra.Command, interactive bool) (*api.AccountResp
 	// Save credentials for future commands. A token that
 	// is saved nowhere is not left valid either.
 	if err := saveSession(cc, resp.User.Login(), resp.Token); err != nil {
-		newAPIClientWithToken(cc, resp.Token).Logout(cc)
+		if c, err := newAPIClientWithToken(cc, resp.Token); err == nil {
+			c.Logout(cc)
+		}
 		return nil, err
 	}
 

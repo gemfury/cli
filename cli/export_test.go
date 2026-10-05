@@ -3,6 +3,7 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
+	"context"
 	"testing"
 	"time"
 )
@@ -15,6 +16,16 @@ func SetLoginPollTimeout(t *testing.T, d time.Duration) {
 // SetLoginPollInterval shortens the wait between polls during a test
 func SetLoginPollInterval(t *testing.T, d time.Duration) {
 	setDuring(t, &loginPollInterval, d)
+}
+
+// ClientTimeouts exposes the timeouts of the API client built for a command
+func ClientTimeouts(t *testing.T, cc context.Context) (request, long time.Duration) {
+	t.Helper()
+	c, err := newAPIClientWithToken(cc, "token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c.Timeout, c.LongTimeout
 }
 
 // setDuring sets a variable until the end of a test, which restores it

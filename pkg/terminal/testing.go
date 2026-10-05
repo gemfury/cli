@@ -78,6 +78,14 @@ func (tt *testTerm) OnOutput(fn func()) {
 	})}
 }
 
+// OnErrOutput calls fn each time that there is a write to Stderr
+func (tt *testTerm) OnErrOutput(fn func()) {
+	tt.ioErr = writeCloser{writerFunc(func(b []byte) (int, error) {
+		defer fn()
+		return tt.streams[0].Write(b)
+	})}
+}
+
 // Handle PromptUI to avoid messing with Readline
 func (tt *testTerm) SetPromptResponses(p map[string]string) {
 	tt.prompts = p

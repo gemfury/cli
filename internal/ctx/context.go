@@ -4,6 +4,7 @@ import (
 	"github.com/gemfury/cli/pkg/terminal"
 
 	"context"
+	"time"
 )
 
 type contextKey int
@@ -26,6 +27,7 @@ type CmdGlobalFlags struct {
 	NoInput      bool
 	Quiet        bool
 	NoProgress   bool
+	HTTPTimeout  time.Duration
 }
 
 func CmdContextWith(ctx context.Context, t terminal.Terminal, as terminal.Auther) context.Context {

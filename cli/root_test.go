@@ -33,6 +33,9 @@ func TestMain(m *testing.M) {
 	os.Unsetenv("FURY_TOKEN")
 	os.Unsetenv("FURY_ACCOUNT")
 
+	// A failed request is not sent again, unless a test asks for that
+	os.Setenv("FURY_RETRIES", "0")
+
 	os.Exit(m.Run())
 }
 
@@ -387,17 +390,25 @@ func expectUnconfirmed(t *testing.T, term terminal.TestTerm, err error, interrup
 	}
 }
 
-// interruptOn handles a request by interrupting the command, by way of
-// cancel, while that request is in flight. It counts the requests handled.
-func interruptOn(cancel func(), requests *atomic.Int32) http.HandlerFunc {
+// stall handles a request by calling onRequest, then holding the request
+// until the client gives it up
+func stall(onRequest func()) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		requests.Add(1)
-		cancel()
+		onRequest()
 
 		// The end of a request is noticed only once its body is read
 		io.Copy(io.Discard, r.Body)
 		<-r.Context().Done()
 	}
+}
+
+// interruptOn counts a request and interrupts the command, by way of cancel,
+// then stalls the request, so that the interruption lands while it is in flight
+func interruptOn(cancel func(), requests *atomic.Int32) http.HandlerFunc {
+	return stall(func() {
+		requests.Add(1)
+		cancel()
+	})
 }
 
 // An interrupted command stops at the item that it was on: the remaining

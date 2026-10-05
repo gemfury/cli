@@ -60,7 +60,10 @@ func NewCmdLogout() *cobra.Command {
 // revocation, the user is asked onFailConfirm before wiping anyway,
 // and declining leaves that refusal as the error.
 func logoutCurrent(cc context.Context, token string, onFailConfirm string) error {
-	c := newAPIClientWithToken(cc, token)
+	c, err := newAPIClientWithToken(cc, token)
+	if err != nil {
+		return err
+	}
 
 	if err := c.Logout(cc); errors.Is(err, context.Canceled) {
 		return err // Interrupted, rather than refused
@@ -100,11 +103,12 @@ func loginWithToken(cc context.Context, token string) error {
 		return err
 	}
 
-	if err := saveSession(cc, user.Login(), token); err != nil {
+	login := user.Login()
+	if err := saveSession(cc, login, token); err != nil {
 		return err
 	}
 
-	ctx.Terminal(cc).Infof("You are logged in as %q\n", user.Login())
+	ctx.Terminal(cc).Infof("You are logged in as %q\n", login)
 	return nil
 }
 

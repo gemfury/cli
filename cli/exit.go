@@ -5,9 +5,6 @@ import (
 	"github.com/gemfury/cli/pkg/terminal"
 
 	"errors"
-	"io"
-	"net"
-	"net/url"
 )
 
 // Exit statuses of the command, as listed in the help of the root command
@@ -69,19 +66,5 @@ func isServerFailure(err error) bool {
 	return errors.Is(err, api.ErrTimeout) ||
 		errors.Is(err, api.ErrFuryServer) ||
 		errors.Is(err, api.ErrTooManyRequests) ||
-		isConnectionError(err)
-}
-
-// isConnectionError reports whether err is a failure to reach the server,
-// or to receive all of its response. It is told by its type, as every
-// failed request is a net.Error, by its url.Error. A connection closed by
-// the server is an EOF for the request, and an unexpected one for the body.
-func isConnectionError(err error) bool {
-	var opErr *net.OpError
-	var dnsErr *net.DNSError
-	var urlErr *url.Error
-
-	return errors.As(err, &opErr) || errors.As(err, &dnsErr) ||
-		errors.As(err, &urlErr) && errors.Is(urlErr, io.EOF) ||
-		errors.Is(err, io.ErrUnexpectedEOF)
+		api.IsConnectionError(err)
 }

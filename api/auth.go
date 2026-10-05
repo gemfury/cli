@@ -52,7 +52,7 @@ type LoginCreateResponse struct {
 
 // LoginGet waits for browser login and retrieves its results (token & user information)
 func (c *Client) LoginGet(cc context.Context, create *LoginCreateResponse) (*LoginGetResponse, error) {
-	req := c.newRequest(cc, "GET", create.CLIURL, false)
+	req := c.newLongRequest(cc, "GET", create.CLIURL, false) // Held by the server until the login
 	if req.err != nil {
 		return nil, req.err
 	}

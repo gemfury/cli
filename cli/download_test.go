@@ -99,6 +99,40 @@ func TestDownloadCommandSuccess(t *testing.T) {
 	}
 }
 
+// stalledDownload sends the first half of the file, calls then, and sends
+// nothing more until the download is given up
+func stalledDownload(then func()) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", fmt.Sprint(len(downloadContent)))
+		w.Write([]byte(downloadContent[:len(downloadContent)/2]))
+		w.(http.Flusher).Flush()
+		then()
+		<-r.Context().Done()
+	}
+}
+
+// A download that stalls past --timeout while its file is read fails as
+// a timeout, and leaves no partial file
+func TestDownloadCommandTimeout(t *testing.T) {
+	auth := terminal.TestAuther("user", "abc123", nil)
+	term := terminal.NewForTest()
+
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/packages/{pkg}/versions/1.2.3", downloadVersionHandler)
+		mux.HandleFunc("/downloads/", stalledDownload(func() {}))
+	})
+
+	cc := testContext(t, term, auth, server)
+	t.Chdir(t.TempDir())
+
+	err := runCommand(cc, []string{"beta", "download", "foo@1.2.3", "--timeout", "50ms"})
+	expectExitStatus(t, term, err, cli.ExitUnavailable)
+	expectErrOutput(t, term, "Error: Operation timed out. Try again later.\n")
+	if _, err := os.Stat("foo-1.2.3.tgz"); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("Expected no file left behind, got %v", err)
+	}
+}
+
 // A download_url on a foreign host is refused rather than sent our token
 func TestDownloadCommandForeignURL(t *testing.T) {
 	auth := terminal.TestAuther("user", "abc123", nil)
@@ -135,14 +169,7 @@ func TestDownloadCommandInterrupted(t *testing.T) {
 
 	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
 		mux.HandleFunc("/packages/{pkg}/versions/1.2.3", downloadVersionHandler)
-		mux.HandleFunc("/downloads/", func(w http.ResponseWriter, r *http.Request) {
-			// Interrupted after the first half of the file
-			w.Header().Set("Content-Length", fmt.Sprint(len(downloadContent)))
-			w.Write([]byte(downloadContent[:len(downloadContent)/2]))
-			w.(http.Flusher).Flush()
-			cancel()
-			<-r.Context().Done()
-		})
+		mux.HandleFunc("/downloads/", stalledDownload(cancel))
 	})
 
 	flags := ctx.GlobalFlags(cc)
