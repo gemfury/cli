@@ -9,7 +9,11 @@ permissions:
   contents: write
 
 jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
   goreleaser:
+    needs: tests
     runs-on: ubuntu-latest
     environment: GoReleaser
     steps:
@@ -25,7 +29,6 @@ jobs:
         uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
-          distribution: goreleaser
           args: release --clean
         env:
           BREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

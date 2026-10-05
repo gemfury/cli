@@ -2,7 +2,7 @@ Gemfury CLI
 ===========
 
 [![Gem Version](https://badge.fury.io/go/github.com%2Fgemfury%2Fcli.svg)](https://badge.fury.io/go/github.com%2Fgemfury%2Fcli)
-[![Build Status](https://github.com/gemfury/cli/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/gemfury/cli/actions/workflows/tests.yml)
+[![Tests](https://github.com/gemfury/cli/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/gemfury/cli/actions/workflows/tests.yml)
 
 This is the Gemfury CLI used to manage your Gemfury packages from the command line.  If you're
 familiar with the service and want to jump straight into command line action, please proceed to
@@ -12,12 +12,60 @@ Gemfury is your personal cloud for your private and custom RubyGems, Python pack
 modules.  Once you upload your packages and enable Gemfury as a source, you can securely deploy
 any package to any host. It's simple, reliable, and hassle-free.
 
+## Installation
 
-### Introduction to Gemfury
+### Homebrew (macOS and Linux)
+
+```
+brew install --cask gemfury/tap/fury-cli
+```
+
+Homebrew 6 and later does not trust third-party taps by default, so use the
+fully qualified name as above, or run `brew trust gemfury/tap` once. The
+legacy Ruby `gemfury` formula also installs a `fury` binary; uninstall it
+first.
+
+### Debian and Ubuntu (apt)
+
+```
+echo "deb [trusted=yes] https://apt.fury.io/cli/ /" | sudo tee /etc/apt/sources.list.d/fury-cli.list
+sudo apt-get update && sudo apt-get install fury-cli
+```
+
+### Alpine (apk)
+
+```
+echo "https://alpine.fury.io/cli/" >> /etc/apk/repositories
+curl -fsSL https://alpine.fury.io/cli/KEY.rsa.pub > /etc/apk/keys/KEY.rsa.pub
+apk add fury-cli
+```
+
+### Arch Linux (pacman)
+
+Add the repository to `/etc/pacman.conf`, then install:
+
+```
+[fury]
+SigLevel = Optional
+Server = https://pacman.fury.io/cli/$arch
+```
+
+```
+pacman -Sy fury-cli
+```
+
+### Binaries
+
+Every release on the [releases page](https://github.com/gemfury/cli/releases)
+ships archives for macOS (universal), Linux (x86_64 and ARM64), and Windows
+(x86_64 and ARM64), with a checksums file to verify them. Unpack the archive
+and put `fury` somewhere on your `PATH`.
+
+## Introduction to Gemfury
 * [Gemfury homepage](https://gemfury.com/)
 * [Getting started with Gemfury](https://gemfury.com/help/getting-started)
 
-### Using Gemfury CLI
+## Using Gemfury CLI
 * [CLI documentation](https://gemfury.com/guide/cli/)
 * [Uploading private packages](https://gemfury.com/guide/cli/basic-usage/)
 * [Manage collaborators](https://gemfury.com/guide/cli/collaboration/)

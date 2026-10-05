@@ -1,28 +1,28 @@
 project_name: fury-cli
 version: 2
 
+# Reproducible builds: no build paths, no build-time timestamps, and the
+# module as served by the Go module proxy (tagged releases only).
+gomod:
+  proxy: true
+
 builds:
   - binary: fury
     main: ./cmd/fury
-    ldflags: -s -w -X main.Version={{.Version}}
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - darwin
-      - linux
-      - windows
-    goarch:
-      - amd64
-      - arm64
+    flags: [-trimpath]
+    ldflags: -s -w -X main.Version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    env: [CGO_ENABLED=0]
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
 
 universal_binaries:
   - name_template: fury
     replace: true
+    mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
-  - formats: [tar.gz]
-    wrap_in_directory: false
-    format_overrides:
+  - format_overrides:
       - goos: windows
         formats: [zip]
     name_template: >-
@@ -33,85 +33,41 @@ archives:
       {{- else if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "arm64" }}ARM64
       {{- else }}{{ .Arch }}{{ end }}
-      {{- if .Arm }}v{{ .Arm }}{{ end -}}
-
-checksum:
-  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
 
 changelog:
   disable: true
 
 release:
   draft: false
+  # A tag with a suffix, as v1.1.0-beta.1, is a pre-release and never "latest".
+  prerelease: auto
 
 nfpms:
   - id: nfpm-default
-    package_name: fury-cli
-
     vendor: Gemfury.com
-    homepage: https://gemfury.com/
-    maintainer: Gemfury Team <team@gemfury.com>
-    description: CLI for the Gemfury package repository
+    homepage: &homepage https://gemfury.com/
+    maintainer: &maintainer Gemfury Team <team@gemfury.com>
+    description: &description CLI for the Gemfury package repository
     license: Proprietary
 
-    formats:
-      - deb
+    # Every format here is pushed to the Gemfury `cli` repository by the
+    # publisher below: deb for apt, apk for Alpine, archlinux for pacman.
+    formats: [deb, apk, archlinux]
+    mtime: "{{ .CommitDate }}"
 
-    bindir: /usr/bin
+    # Written to .PKGINFO; without it nfpm writes "Unknown Packager".
+    archlinux:
+      packager: *maintainer
 
 publishers:
   - name: gemfury-repo
-    dir: "{{ dir .ArtifactPath }}"
-    cmd: curl -s -F p1=@{{ .ArtifactName }} https://{{ .Env.FURY_PUSH_TOKEN }}@push.fury.io/cli/
-    ids:
-      - nfpm-default
+    # A rejected upload fails the release instead of passing silently.
+    cmd: curl -sS --fail-with-body -F p1=@{{ .ArtifactPath }} https://{{ .Env.FURY_PUSH_TOKEN }}@push.fury.io/cli/
+    ids: [nfpm-default]
 
-brews:
-  -
-    # Name template of the recipe
-    name: fury-cli
-
-    # GitHub repository to receive formula
-    repository:
-      owner: gemfury
-      name: homebrew-tap
-      token: "{{ .Env.BREW_TAP_GITHUB_TOKEN }}"
-
-    # Git author used to commit to the repository.
-    commit_author:
-      email: goreleaser@gemfury.com
-      name: goreleaser
-
-    # Folder inside the repository to put the formula.
-    directory: Formula
-
-    # App's homepage.
-    homepage: "https://gemfury.com/"
-
-    # App's description.
-    description: "CLI for the Gemfury package repository"
-
-    # Conflicts with Ruby CLI
-    conflicts:
-      - gemfury
-
-    # Transition notice; retire it together with this block.
-    caveats: |
-      The fury-cli formula will be replaced by a cask in an upcoming release.
-      To switch early: brew uninstall fury-cli && brew install --cask gemfury/tap/fury-cli
-
-    # Run to `brew test` the formula.
-    test: |
-      system "#{bin}/fury --version"
-
-# Replaces the deprecated `brews` formula above; both publish to the same
-# tap until the formula is retired.
 homebrew_casks:
-  - name: fury-cli
-
-    # Defaults to the cask name (fury-cli); the archive ships `fury`.
-    binaries:
-      - fury
+  # Defaults to the cask name (fury-cli); the archive ships `fury`.
+  - binaries: [fury]
 
     repository:
       owner: gemfury
@@ -122,10 +78,8 @@ homebrew_casks:
       email: goreleaser@gemfury.com
       name: goreleaser
 
-    directory: Casks
-
-    homepage: "https://gemfury.com/"
-    description: "CLI for the Gemfury package repository"
+    homepage: *homepage
+    description: *description
 
     # A cask cannot declare a conflict with a formula, so warn about the
     # Ruby "gemfury" formula here instead.
@@ -133,11 +87,15 @@ homebrew_casks:
       This cask installs the "fury" binary and cannot coexist with the
       legacy Ruby "gemfury" formula. Uninstall it first if present.
 
-    # Homebrew quarantines cask downloads and Gatekeeper blocks unsigned
-    # quarantined binaries, so clear the bit. Linux casks need no such step.
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-d", "com.apple.quarantine", "#{staged_path}/fury"]
-          end
+    # Homebrew quarantines cask downloads, and Gatekeeper blocks unsigned
+    # quarantined binaries, so clear the bit on macOS. Homebrew 7 deprecated
+    # the `postflight` stanza that `hooks.post.install` emits, in favour of
+    # `postflight_steps`, which GoReleaser cannot write yet (goreleaser#6870),
+    # hence the custom block. `{{staged_path}}` is a Homebrew token, quoted so
+    # that GoReleaser's own templating leaves it in place.
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr", args: ["-d", "com.apple.quarantine", "{{ "{{staged_path}}" }}/fury"], must_succeed: false
+        end
+      end
