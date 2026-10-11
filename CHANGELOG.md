@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `FURY_API_URL` and `FURY_PUSH_URL` point the CLI at another API and upload
+  endpoint, as a URL or a host name, for staging and local servers. The URL
+  may have a path, below which the CLI makes its requests.
+
 ## v1.0.0
 
 `fury` 1.0 is the Gemfury CLI continued in Go. It replaces the CLI

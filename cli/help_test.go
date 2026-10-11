@@ -91,7 +91,7 @@ func TestHelpExamples(t *testing.T) {
 // the account is, and how the kind of a package is given
 func TestHelpValues(t *testing.T) {
 	for command, exps := range map[string][]string{
-		"fury":             {"--api-token, or else by FURY_TOKEN"},
+		"fury":             {"--api-token, or else by FURY_TOKEN", "FURY_API_URL", "FURY_PUSH_URL"},
 		"fury accounts":    {"can be given to --account"},
 		"fury packages":    {"Account to act on, if not your own"},
 		"fury sharing add": {"pull, push, or owner"},

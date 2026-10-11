@@ -99,6 +99,43 @@ func TestDownloadCommandSuccess(t *testing.T) {
 	}
 }
 
+// An endpoint with a path serves downloads below that path, with the query
+// of their URL, and a URL on the same host outside the path is refused
+func TestDownloadCommandEndpointPath(t *testing.T) {
+	server := testutil.APIServerCustom(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/api/packages/{pkg}/versions/1.2.3", func(w http.ResponseWriter, r *http.Request) {
+			pkg := r.PathValue("pkg")
+			v := downloadVersionJSON(r, "ver_"+pkg, pkg, "1.2.3", pkg+"-1.2.3.tgz")
+			if pkg == "foo" {
+				v = strings.Replace(v, "/downloads/foo-1.2.3.tgz", "/api/downloads/foo-1.2.3.tgz?sig=1", 1)
+			}
+			w.Write([]byte(v))
+		})
+		mux.HandleFunc("/api/downloads/", func(w http.ResponseWriter, r *http.Request) {
+			if q := r.URL.RawQuery; q != "sig=1" {
+				t.Errorf("Expected the query of the download URL, got %q", q)
+			}
+			downloadHandler(t)(w, r)
+		})
+	})
+
+	cc := testContext(t, terminal.NewForTest(), terminal.TestAuther("user", "abc123", nil), server)
+	ctx.GlobalFlags(cc).Endpoint = server.URL + "/api"
+	t.Chdir(t.TempDir())
+
+	if err := runCommandNoErr(cc, []string{"beta", "download", "foo@1.2.3"}); err != nil {
+		t.Fatal(err)
+	} else if body, err := os.ReadFile("foo-1.2.3.tgz"); err != nil || string(body) != downloadContent {
+		t.Errorf("Downloaded content %q, expected %q: %v", body, downloadContent, err)
+	}
+
+	err := runCommand(cc, []string{"beta", "download", "bar@1.2.3"})
+	if err == nil || !strings.Contains(err.Error(), "not served by") {
+		t.Fatalf("Expected a refused URL outside the endpoint path, got: %v", err)
+	}
+	expectNoFile(t, "bar-1.2.3.tgz")
+}
+
 // stalledDownload sends the first half of the file, calls then, and sends
 // nothing more until the download is given up
 func stalledDownload(then func()) http.HandlerFunc {

@@ -28,10 +28,6 @@ const (
 	// Response header with the ID of the request, to report a failure by
 	hdrRequestID = "X-Request-Id"
 
-	// Default API endpoints
-	defaultPushEndpoint = "https://push.fury.io"
-	defaultEndpoint     = "https://api.fury.io"
-
 	// Bounds of the waits between retries: see backoff
 	retryWaitMin  = time.Second
 	retryWaitMax  = 20 * time.Second
@@ -45,7 +41,8 @@ const (
 )
 
 var (
-	// DefaultConduit is a wrapper for http.DefaultTransport
+	// DefaultConduit is how every client sends its requests: by the
+	// transport of the process, with headers and retries.
 	DefaultConduit = &conduitStandard{
 		Transport: http.DefaultTransport,
 		Version:   "???",
@@ -54,11 +51,13 @@ var (
 
 // Client is the main entrypoint for interacting with Gemfury API
 type Client struct {
-	conduit      conduit
-	PushEndpoint string
-	Endpoint     string
-	Account      string
-	Token        string
+	// Base URLs of uploads and of the rest of the API. Request paths
+	// are joined below them, so they may have a path of their own.
+	PushEndpoint *url.URL
+	Endpoint     *url.URL
+
+	Account string
+	Token   string
 
 	// Timeout of a request, and LongTimeout of one that transfers a
 	// file or waits for a browser login
@@ -70,12 +69,12 @@ type Client struct {
 	Retries int
 }
 
-// NewClient creates a new client using the DefaultConduit
+// NewClient creates a new client, which sends by DefaultConduit. Its
+// endpoints are those of Gemfury, as URLs of its own that a caller may change.
 func NewClient(token, account string) *Client {
 	return &Client{
-		conduit:      DefaultConduit,
-		PushEndpoint: defaultPushEndpoint,
-		Endpoint:     defaultEndpoint,
+		PushEndpoint: &url.URL{Scheme: "https", Host: "push.fury.io"},
+		Endpoint:     &url.URL{Scheme: "https", Host: "api.fury.io"},
 		Account:      account,
 		Token:        token,
 		Timeout:      30 * time.Second,
@@ -103,37 +102,66 @@ func (c *Client) newPushRequest(cc context.Context, method, rawPath string, impe
 	return req
 }
 
-func (c *Client) makeRequest(cc context.Context, method, base, rawPath string, impersonate bool) *request {
-	baseURL, err := url.Parse(base)
+func (c *Client) makeRequest(cc context.Context, method string, base *url.URL, rawPath string, impersonate bool) *request {
+	reqURL, err := c.requestURL(base, rawPath, impersonate)
 	if err != nil {
 		return &request{err: err}
 	}
 
-	// Render URI Templates (RFC6570) to populate {acct}, etc
-	reqURL, err := c.renderURITemplate(baseURL.String() + rawPath)
-	if err != nil {
-		return &request{err: err}
-	}
-
-	// Append impersonation, if requested
-	if as := c.Account; impersonate && as != "" {
-		query := url.Values{"as": []string{as}}.Encode()
-		if strings.Contains(reqURL, "?") {
-			reqURL = reqURL + "&" + query
-		} else {
-			reqURL = reqURL + "?" + query
-		}
-	}
-
-	// Generate http.Request object using conduit
-	r, err := c.conduit.NewRequest(cc, method, reqURL, nil)
+	// Generate http.Request object using the conduit
+	r, err := DefaultConduit.NewRequest(cc, method, reqURL, nil)
 
 	// Populate authentication, if present
 	if token := c.Token; r != nil && token != "" {
 		r.Header.Set("Authorization", token)
 	}
 
-	return &request{Request: r, err: err, conduit: c.conduit, retries: c.Retries, onRetry: c.OnRetry}
+	return &request{Request: r, err: err, retries: c.Retries, onRetry: c.OnRetry}
+}
+
+// requestURL is rawPath, with its query if it has one, below base, which
+// may have a path of its own. URI Templates (RFC6570) in the path are
+// rendered to populate {acct}, etc, and impersonation is added to the query.
+func (c *Client) requestURL(base *url.URL, rawPath string, impersonate bool) (string, error) {
+	path, query, _ := strings.Cut(rawPath, "?")
+	path, err := c.renderURITemplate(path)
+	if err != nil {
+		return "", err
+	}
+
+	u := base.JoinPath(path)
+	queryValues := u.Query()
+	if as := c.Account; impersonate && as != "" {
+		queryValues.Set("as", as)
+	}
+
+	urlQuery := queryValues.Encode()
+	if urlQuery != "" && query != "" {
+		urlQuery += "&"
+	}
+
+	u.RawQuery = urlQuery + query
+	return u.String(), nil
+}
+
+// endpointPath computes the relative the path (with query) of a URL below the
+// API endpoint, with its query. Returns false when the URL is served elsewhere
+func (c *Client) endpointPath(rawURL string) (string, bool) {
+	base := c.Endpoint
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme != base.Scheme || !strings.EqualFold(u.Host, base.Host) {
+		return "", false
+	}
+
+	path, ok := strings.CutPrefix(u.EscapedPath(), strings.TrimSuffix(base.EscapedPath(), "/"))
+	if !ok || !strings.HasPrefix(path, "/") {
+		return "", false
+	}
+
+	if u.RawQuery != "" {
+		path += "?" + u.RawQuery
+	}
+	return path, true
 }
 
 // Populate API request body as JSON with the proper Content-Type header
@@ -174,7 +202,6 @@ func (c *Client) renderURITemplate(pathTemplate string) (string, error) {
 type request struct {
 	*http.Request
 	err error
-	conduit
 
 	timeout time.Duration
 	onRetry func(string)
@@ -187,7 +214,7 @@ func (r *request) doCommon() (*http.Response, error) {
 		return nil, r.err
 	}
 
-	resp, err := r.conduit.Do(r)
+	resp, err := DefaultConduit.Do(r)
 	if err != nil {
 		return resp, timeoutErr(err)
 	}
@@ -284,18 +311,14 @@ func (b timeoutBody) Read(p []byte) (int, error) {
 	return n, timeoutErr(err)
 }
 
-// Wrapper for net/http: builds a request, and sends it with its
-// timeout and retries
-type conduit interface {
-	NewRequest(context.Context, string, string, io.Reader) (*http.Request, error)
-	Do(*request) (*http.Response, error)
-}
-
+// conduitStandard is the wrapper for net/http that builds each request, and
+// sends it with its timeout and retries. See DefaultConduit, the only one.
 type conduitStandard struct {
 	Transport http.RoundTripper
 	Version   string
 }
 
+// NewRequest builds a request of the API, with the headers that every one has
 func (c *conduitStandard) NewRequest(cc context.Context, method, rawURL string, body io.Reader) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(cc, method, rawURL, body)
 	if err != nil {

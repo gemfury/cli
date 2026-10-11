@@ -7,6 +7,7 @@ import (
 
 	"bufio"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -167,6 +168,36 @@ func TestAccountPrecedence(t *testing.T) {
 
 			if _, got := packagesRequest(t, auth, tc.flags); got != tc.exp {
 				t.Errorf("Expected account %q, got %q", tc.exp, got)
+			}
+		})
+	}
+}
+
+// The account is added to the query of a request that has one of its own
+func TestAccountWithQuery(t *testing.T) {
+	var query url.Values
+	server := testutil.APIServerCustom(t, func(h *http.ServeMux) {
+		h.HandleFunc("/packages/foo/versions", func(w http.ResponseWriter, r *http.Request) {
+			query = r.URL.Query()
+			w.Write([]byte("[]"))
+		})
+	})
+
+	cc := testContext(t, terminal.NewForTest(), terminal.TestAuther("user", "abc123", nil), server)
+	if err := runCommandNoErr(cc, []string{"versions", "foo", "--account", "org"}); err != nil {
+		t.Fatal(err)
+	} else if query.Get("expand") != "package" || query.Get("as") != "org" {
+		t.Errorf("Expected expand=package and as=org, got %v", query)
+	}
+}
+
+// Help is given whatever the environment holds, as it sends no request
+func TestHelpIgnoresEnv(t *testing.T) {
+	for env, value := range map[string]string{"FURY_RETRIES": "x", "FURY_API_URL": "://bad"} {
+		t.Run(env, func(t *testing.T) {
+			t.Setenv(env, value)
+			if out := helpOutput(t, "help", "packages"); !strings.Contains(out, "fury packages [flags]") {
+				t.Errorf("Expected the help of packages, got %q", out)
 			}
 		})
 	}

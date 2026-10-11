@@ -11,6 +11,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -42,13 +43,16 @@ func newAPIClientWithToken(cc context.Context, token string) (*api.Client, error
 		c.Retries = retries
 	}
 
-	// Endpoint overrides (testing, staging). The client joins paths onto
-	// these and compares URLs against them, so normalize away a trailing "/".
-	if e := flags.PushEndpoint; e != "" {
-		c.PushEndpoint = strings.TrimSuffix(e, "/")
+	// Endpoint overrides (testing, staging), from the fields or the environment
+	if u, err := endpointOf(flags.PushEndpoint, "FURY_PUSH_URL"); err != nil {
+		return nil, err
+	} else if u != nil {
+		c.PushEndpoint = u
 	}
-	if e := flags.Endpoint; e != "" {
-		c.Endpoint = strings.TrimSuffix(e, "/")
+	if u, err := endpointOf(flags.Endpoint, "FURY_API_URL"); err != nil {
+		return nil, err
+	} else if u != nil {
+		c.Endpoint = u
 	}
 
 	// --timeout is that of every request, long ones included; zero is the default
@@ -131,6 +135,34 @@ func flagOrEnv(flag, env string) string {
 		return flag
 	}
 	return strings.TrimSpace(os.Getenv(env))
+}
+
+// endpointOf is the base URL of an API: the field a host or a test sets,
+// parsed as given, or else the environment variable, which gives a URL or
+// names a host (https assumed). The URL may have a path, below which the
+// client requests, but a query or a fragment is no endpoint, so it is
+// refused. Nil leaves the client's default.
+func endpointOf(field, env string) (*url.URL, error) {
+	if field != "" {
+		return url.Parse(field)
+	}
+
+	value := strings.TrimSpace(os.Getenv(env))
+	if value == "" {
+		return nil, nil
+	}
+
+	raw := value
+	if !strings.Contains(raw, "://") {
+		raw = "https://" + raw
+	}
+
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || strings.ContainsAny(raw, "?#") {
+		return nil, usageErrorf("%s must be a URL or host, not %q", env, value)
+	}
+
+	return u, nil
 }
 
 // skipAuthKey is the annotation of a command that skips authentication

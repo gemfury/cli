@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -79,14 +78,6 @@ func TestRetries(t *testing.T) {
 				t.Errorf("Expected %d requests, got %d", tc.requests, n)
 			}
 		})
-	}
-}
-
-// Help is given whatever FURY_RETRIES holds, as it sends no request
-func TestHelpIgnoresRetriesEnv(t *testing.T) {
-	t.Setenv("FURY_RETRIES", "x")
-	if out := helpOutput(t, "help", "packages"); !strings.Contains(out, "fury packages [flags]") {
-		t.Errorf("Expected the help of packages, got %q", out)
 	}
 }
 
@@ -221,10 +212,22 @@ func TestTimeoutNegative(t *testing.T) {
 	expectUsageError(t, []string{"versions", "foo", "--timeout", "-1s"}, "--timeout cannot be negative: -1s")
 }
 
-// A request has 30s by default, and a transfer 10m
-func TestTimeoutDefaults(t *testing.T) {
-	cc := testContext(t, terminal.NewForTest(), terminal.TestAuther("user", "abc123", nil), offlineServer(t))
-	if request, long := cli.ClientTimeouts(t, cc); request != 30*time.Second || long != 10*time.Minute {
-		t.Errorf("Expected 30s and 10m, got %s and %s", request, long)
+// A request has 30s by default, and a transfer 10m, and the endpoints are
+// those of Gemfury, with FURY_API_URL and FURY_PUSH_URL unset or blank.
+// These are inspected, as no request can show them.
+func TestClientDefaults(t *testing.T) {
+	for name, env := range map[string]map[string]string{
+		"unset": nil,
+		"blank": {"FURY_API_URL": " \n", "FURY_PUSH_URL": " \n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := cli.ClientForTest(t, envContext(t, env))
+			if c.Timeout != 30*time.Second || c.LongTimeout != 10*time.Minute {
+				t.Errorf("Expected 30s and 10m, got %s and %s", c.Timeout, c.LongTimeout)
+			}
+			if api, push := c.Endpoint.String(), c.PushEndpoint.String(); api != "https://api.fury.io" || push != "https://push.fury.io" {
+				t.Errorf("Expected the endpoints of Gemfury, got %q and %q", api, push)
+			}
+		})
 	}
 }

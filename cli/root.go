@@ -29,6 +29,8 @@ Environment variables:
   FURY_TOKEN     Authentication token, unless --api-token is given
   FURY_ACCOUNT   Account to act on, unless --account is given
   FURY_RETRIES   Times a request that reads is sent again (default 3)
+  FURY_API_URL   API URL, in place of https://api.fury.io
+  FURY_PUSH_URL  Upload URL, in place of https://push.fury.io
 
 Without a terminal, or with --no-input, nothing is asked: pass --yes
 to confirm, and set FURY_TOKEN to authenticate.

@@ -95,6 +95,25 @@ func APIPaginatedResponse(t *testing.T, w http.ResponseWriter, r *http.Request, 
 // APIServerCustom starts a test server that is closed at the end of the test
 func APIServerCustom(t *testing.T, custom func(*http.ServeMux)) *httptest.Server {
 	t.Helper()
+	server := httptest.NewServer(apiMux(t, custom))
+	t.Cleanup(server.Close)
+	return server
+}
+
+// APIServerCustomTLS is APIServerCustom over TLS, for an endpoint that must
+// be https. Its certificate is for 127.0.0.1, the host of its URL, and is
+// trusted by the transport of server.Client().
+func APIServerCustomTLS(t *testing.T, custom func(*http.ServeMux)) *httptest.Server {
+	t.Helper()
+	server := httptest.NewTLSServer(apiMux(t, custom))
+	t.Cleanup(server.Close)
+	return server
+}
+
+// apiMux is the handler of a test server: the custom handlers, then the
+// defaults for login and for any request that nothing else handles
+func apiMux(t *testing.T, custom func(*http.ServeMux)) *http.ServeMux {
+	t.Helper()
 	h := http.NewServeMux()
 
 	// Add custom path handlers
@@ -140,9 +159,7 @@ func APIServerCustom(t *testing.T, custom func(*http.ServeMux)) *httptest.Server
 		})
 	}
 
-	server := httptest.NewServer(h)
-	t.Cleanup(server.Close)
-	return server
+	return h
 }
 
 func hasHandlerFor(h *http.ServeMux, method, path string) bool {

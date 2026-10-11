@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -30,8 +31,12 @@ func TestMain(m *testing.M) {
 	os.Setenv("TZ", "US/Pacific")
 
 	// Tests run the same whatever the developer's own Gemfury setup
-	os.Unsetenv("FURY_TOKEN")
-	os.Unsetenv("FURY_ACCOUNT")
+	for _, kv := range os.Environ() {
+		if strings.HasPrefix(kv, "FURY_") {
+			name, _, _ := strings.Cut(kv, "=")
+			os.Unsetenv(name)
+		}
+	}
 
 	// A failed request is not sent again, unless a test asks for that
 	os.Setenv("FURY_RETRIES", "0")
@@ -93,12 +98,17 @@ func runCommandNoErr(cc context.Context, args []string) error {
 // It has no credentials, and any API request fails the test.
 func helpOutput(t *testing.T, args ...string) string {
 	t.Helper()
-	term := terminal.NewForTest()
-	cc := testContext(t, term, terminal.TestAuther("", "", nil), offlineServer(t))
+	cc := testContext(t, terminal.NewForTest(), terminal.TestAuther("", "", nil), offlineServer(t))
+	return helpOutputIn(t, cc, args...)
+}
+
+// helpOutputIn is helpOutput in the given command context
+func helpOutputIn(t *testing.T, cc context.Context, args ...string) string {
+	t.Helper()
 	if err := runCommandNoErr(cc, args); err != nil {
 		t.Fatal(err)
 	}
-	return string(term.OutBytes())
+	return string(ctx.TestTerm(cc).OutBytes())
 }
 
 // serving is a server to start for a test, which
@@ -136,6 +146,25 @@ func testContext(t *testing.T, term terminal.Terminal, auth terminal.Auther, ser
 	flags.PushEndpoint = server.URL
 	flags.Endpoint = server.URL
 	return cc
+}
+
+// envContext builds a command context with no endpoint field set, so the
+// API endpoints come from the environment, which env sets for the test.
+// The user is logged in.
+func envContext(t *testing.T, env map[string]string) context.Context {
+	t.Helper()
+	for name, value := range env {
+		t.Setenv(name, value)
+	}
+	return cli.TestContext(t.Context(), terminal.NewForTest(), terminal.TestAuther("user", "abc123", nil))
+}
+
+// expectNoFile asserts that there is nothing at path
+func expectNoFile(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("Expected no file at %s, got: %v", path, err)
+	}
 }
 
 // expectSummaryError asserts the error a multi-item command returns when
@@ -214,6 +243,17 @@ func offlineServer(t *testing.T) *httptest.Server {
 			w.WriteHeader(http.StatusNotImplemented)
 		})
 	})
+}
+
+// trustServer has the API client trust the certificate of a TLS test
+// server, by the transport of the server's own client, until the end of
+// the test. The transport is one of the process, so this is safe only
+// while no test runs in parallel, as none does.
+func trustServer(t *testing.T, server *httptest.Server) {
+	t.Helper()
+	prev := api.DefaultConduit.Transport
+	t.Cleanup(func() { api.DefaultConduit.Transport = prev })
+	api.DefaultConduit.Transport = server.Client().Transport
 }
 
 // respondWith handles any request with the given status and body
@@ -329,8 +369,14 @@ func TestUsageErrorOutput(t *testing.T) {
 // for a user who is logged out and with no request of the API
 func expectUsageError(t *testing.T, args []string, msg string) {
 	t.Helper()
-	term := terminal.NewForTest()
-	cc := testContext(t, term, terminal.TestAuther("", "", nil), offlineServer(t))
+	cc := testContext(t, terminal.NewForTest(), terminal.TestAuther("", "", nil), offlineServer(t))
+	expectUsageErrorIn(t, cc, args, msg)
+}
+
+// expectUsageErrorIn is expectUsageError in the given command context
+func expectUsageErrorIn(t *testing.T, cc context.Context, args []string, msg string) {
+	t.Helper()
+	term := ctx.TestTerm(cc)
 
 	err := runCommand(cc, args)
 	if !cli.IsUsageError(err) {

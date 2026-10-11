@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"strings"
 )
 
 // Listing all versions for an account for backup purposes, etc
@@ -48,8 +47,8 @@ type VersionFile struct {
 // The URL must be served by this client's API endpoint, since the request is
 // authenticated with the client's token.
 func (c *Client) DownloadVersion(cc context.Context, v *VersionFile) (io.ReadCloser, int64, error) {
-	path, ok := strings.CutPrefix(v.DownloadURL, c.Endpoint)
-	if !ok || !strings.HasPrefix(path, "/") {
+	path, ok := c.endpointPath(v.DownloadURL)
+	if !ok {
 		return nil, 0, fmt.Errorf("Download URL %q is not served by %s", v.DownloadURL, c.Endpoint)
 	}
 

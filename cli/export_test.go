@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/gemfury/cli/api"
 	"github.com/spf13/cobra"
 
 	"context"
@@ -18,14 +19,15 @@ func SetLoginPollInterval(t *testing.T, d time.Duration) {
 	setDuring(t, &loginPollInterval, d)
 }
 
-// ClientTimeouts exposes the timeouts of the API client built for a command
-func ClientTimeouts(t *testing.T, cc context.Context) (request, long time.Duration) {
+// ClientForTest exposes the API client built for a command, for the one
+// test that inspects its defaults; every other test sends requests
+func ClientForTest(t *testing.T, cc context.Context) *api.Client {
 	t.Helper()
 	c, err := newAPIClientWithToken(cc, "token")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return c.Timeout, c.LongTimeout
+	return c
 }
 
 // setDuring sets a variable until the end of a test, which restores it
